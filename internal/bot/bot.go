@@ -213,7 +213,7 @@ func (b *Bot) recommendChannel(mt *Match) error {
 		return b.errors.NoAvailableVCh
 	}
 
-	g, err := b.session.Guild(mt.tCh.GuildID)
+	g, err := b.session.State.Guild(mt.tCh.GuildID)
 	if err != nil {
 		return err
 	}
@@ -226,6 +226,7 @@ func (b *Bot) recommendChannel(mt *Match) error {
 			vCh = availableVChs[0]
 		}
 	} else {
+		glog.Warningf("No voice states")
 		vCh = availableVChs[0]
 	}
 	mt.recommendedChannel = vCh
