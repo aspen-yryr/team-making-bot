@@ -23,6 +23,12 @@ const (
 	teamPreview
 )
 
+const (
+	info  = 1
+	debug = 5
+	trace = 6
+)
+
 var Stamp = map[string]string{
 	"1": "1️⃣",
 	"2": "2️⃣",
@@ -99,6 +105,15 @@ func (b *Bot) getUsingVCh() []*dg.Channel {
 	return using
 }
 
+func (b *Bot) getChannelName(chID string) string {
+	ch, err := b.session.State.Channel(chID)
+	if err != nil {
+		glog.Errorf("Cannot get channel name because %s", err)
+		return "Search error"
+	}
+	return ch.Name
+}
+
 func (b *Bot) getMatchByTChID(chID string) (*Match, error) {
 	for _, m := range b.matches {
 		if m.tCh.ID == chID {
@@ -147,7 +162,9 @@ func (b *Bot) isMentionedMessage(m *dg.MessageCreate) bool {
 	return false
 }
 
-func (b *Bot) channelWithVoiceState(vChs []*dg.Channel, vss []*dg.VoiceState) ([]*chWithVss, error) {
+func (b *Bot) packChannelsAndVoiceStates(vChs []*dg.Channel, vss []*dg.VoiceState) ([]*chWithVss, error) {
+	glog.V(trace).Infoln("packChannelsAndVoiceStates called")
+
 	targets := []*chWithVss{}
 	if len(vChs) == 0 {
 		return nil, b.errors.InvalidArgument
@@ -171,16 +188,20 @@ func (b *Bot) channelWithVoiceState(vChs []*dg.Channel, vss []*dg.VoiceState) ([
 }
 
 func (b *Bot) getMostPeopleVCh(vChs []*dg.Channel, vss []*dg.VoiceState) *dg.Channel {
-	glog.V(5).Infoln("getMostPeopleVCh called")
+	glog.V(trace).Infoln("getMostPeopleVCh called")
 
-	targets, _ := b.channelWithVoiceState(vChs, vss)
+	targets, err := b.packChannelsAndVoiceStates(vChs, vss)
+	if err != nil {
+		glog.Errorf("Cannot pack channels and voice states because %s", err)
+		return nil
+	}
 	max := struct {
 		ch    *dg.Channel
 		count int
 	}{nil, -1}
 	for _, tg := range targets {
 		if max.count < len(tg.vss) {
-			glog.V(5).Infof("Channel \"%s\" has %d user\n", tg.ch.Name, len(tg.vss))
+			glog.V(trace).Infof("Channel \"%s\" has %d user", tg.ch.Name, len(tg.vss))
 			max.ch, max.count = tg.ch, len(tg.vss)
 		}
 	}
@@ -188,7 +209,8 @@ func (b *Bot) getMostPeopleVCh(vChs []*dg.Channel, vss []*dg.VoiceState) *dg.Cha
 }
 
 func (b *Bot) recommendChannel(mt *Match) error {
-	glog.V(5).Infoln("recommendChannel called")
+	glog.V(trace).Infoln("recommendChannel called")
+
 	if mt.tCh == nil {
 		return b.errors.Unknown
 	}
@@ -207,7 +229,7 @@ func (b *Bot) recommendChannel(mt *Match) error {
 		}
 	}
 
-	glog.V(5).Infof("availableVChs: %+v", availableVChs)
+	glog.V(trace).Infof("availableVChs: %+v", availableVChs)
 	if len(availableVChs) == 0 {
 		return b.errors.NoAvailableVCh
 	}
@@ -219,13 +241,12 @@ func (b *Bot) recommendChannel(mt *Match) error {
 
 	var vCh *dg.Channel
 	if len(g.VoiceStates) > 0 {
-		//TODO: 仕様検討
 		vCh = b.getMostPeopleVCh(availableVChs, g.VoiceStates)
 		if vCh == nil {
 			vCh = availableVChs[0]
 		}
 	} else {
-		glog.Warningf("No voice states")
+		glog.Warningf("Guild %s: No voice states", mt.tCh.Name)
 		vCh = availableVChs[0]
 	}
 	mt.recommendedChannel = vCh
@@ -268,49 +289,52 @@ func (b *Bot) setVCh(mt *Match, ch *dg.Channel, team string) error {
 }
 
 func (b *Bot) cmdStart(m *dg.MessageCreate) {
-	if b.isMentionedMessage(m) {
-		// TODO: declare keyword as constant
-		if hasKeyword(`start`, m.Content) {
-			mt, err := b.startMatch(m)
-			if errors.Is(err, b.errors.MatchAlreadyStarted) {
-				glog.Warningf("ChannelID: \"%s\" Match already started")
-				b.session.ChannelMessageSend(
-					m.ChannelID,
-					b.messages.MatchAlreadyStarted.Format(),
-				)
-				return
-			} else if err != nil {
-				glog.Errorf("ChannelID: \"%s\" Cannot start match because %s\n", m.ChannelID, err)
-				b.session.ChannelMessageSend(
-					m.ChannelID,
-					b.messages.UnknownError.Format(),
-				)
-				return
-			}
-
-			err = b.recommendChannel(mt)
-			if errors.Is(err, b.errors.NoAvailableVCh) {
-				b.session.ChannelMessageSend(
-					m.ChannelID,
-					b.messages.NoVChAvailable.Format(),
-				)
-				return
-			} else if err != nil {
-				glog.Errorf("ChannelID: \"%s\" Cannot recommend vc because %s", m.ChannelID, err)
-			}
-
-			glog.V(5).Infof("Match started on %s\n", mt.tCh.Name)
+	// TODO: declare keyword as constant
+	if hasKeyword(`start`, m.Content) {
+		mt, err := b.createMatch(m)
+		if errors.Is(err, b.errors.MatchAlreadyStarted) {
+			glog.Warningf("Channel \"%s\": Match already started", b.getChannelName(m.ChannelID))
+			b.session.ChannelMessageSend(
+				m.ChannelID,
+				b.messages.MatchAlreadyStarted.Format(),
+			)
+			return
+		} else if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot handle start command because %s", b.getChannelName(m.ChannelID), err)
+			b.session.ChannelMessageSend(
+				m.ChannelID,
+				b.messages.UnknownError.Format(),
+			)
+			return
 		}
+
+		err = b.recommendChannel(mt)
+		if errors.Is(err, b.errors.NoAvailableVCh) {
+			glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", mt.tCh.Name, err)
+			b.session.ChannelMessageSend(
+				m.ChannelID,
+				b.messages.NoVChAvailable.Format(),
+			)
+			return
+		} else if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", mt.tCh.Name, err)
+			b.session.ChannelMessageSend(
+				m.ChannelID,
+				b.messages.UnknownError.Format(),
+			)
+			return
+		}
+		glog.V(debug).Infof("Channel \"%s\": Match started", mt.tCh.Name)
 	}
 }
 
 func (b *Bot) cmdExit(m *dg.MessageCreate) {
 	err := b.exitMatch(m)
 	if errors.Is(err, b.errors.MatchNotFound) {
-		glog.Warningf("ChannelID: \"%s\" has no match", m.ChannelID)
+		glog.Warningf("Channel \"%s\": Match not found", b.getChannelName(m.ChannelID))
 		return
 	} else if err != nil {
-		glog.Errorf("ChannelID: \"%s\" Handle end command error: %s\n", m.ChannelID, err)
+		glog.Errorf("Channel \"%s\": Cannot handle end command because %s", b.getChannelName(m.ChannelID), err)
 		b.session.ChannelMessageSend(
 			m.ChannelID,
 			b.messages.UnknownError.Format(),
@@ -321,6 +345,7 @@ func (b *Bot) cmdExit(m *dg.MessageCreate) {
 		m.ChannelID,
 		b.messages.Exit.Format(),
 	)
+	glog.V(info).Infof("Channel \"%s\": match has deleted", b.getChannelName(m.ChannelID))
 }
 
 func (b *Bot) cmdHelp(m *dg.MessageCreate) {
@@ -329,13 +354,14 @@ func (b *Bot) cmdHelp(m *dg.MessageCreate) {
 		b.messages.Help.Format(),
 	)
 	if err != nil {
-		glog.Errorf("ChannelID: \"%s\" Cannot send help message because %s\n", m.ChannelID, err)
+		glog.Errorf("Channel \"%s\": Cannot handle help command because %s", b.getChannelName(m.ChannelID), err)
 		b.session.ChannelMessageSend(
 			m.ChannelID,
 			b.messages.UnknownError.Format(),
 		)
 		return
 	}
+	glog.V(info).Infof("Channel \"%s\": Help message sent", b.getChannelName(m.ChannelID))
 }
 
 func (b *Bot) handleVChSettingMessage(mt *Match, m *dg.MessageCreate) {
@@ -359,7 +385,7 @@ func (b *Bot) handleVChSettingMessage(mt *Match, m *dg.MessageCreate) {
 
 	cs, err := b.session.GuildChannels(m.GuildID)
 	if err != nil {
-		glog.Errorf("ChannelID: \"%s\" Cannot get guild channels", m.ChannelID)
+		glog.Errorf("Channel \"%s\": Cannot get guild channels", mt.tCh.Name)
 		return
 	}
 	vChs := b.filterChannelsByType(cs, dg.ChannelTypeGuildVoice)
@@ -376,17 +402,21 @@ func (b *Bot) handleVChSettingMessage(mt *Match, m *dg.MessageCreate) {
 					m.ChannelID,
 					ctx.askMsg.Format(),
 				)
-				glog.Warningf("ChannelID: \"%s\" Conflict voice channel", m.ChannelID)
+				glog.Warningf("Channel \"%s\": Conflict voice channel", mt.tCh.Name)
 				return
 			} else if err != nil {
-				glog.Errorf("Cannot set voice channel because %s\n", err)
+				glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", mt.tCh.Name, err)
 				return
 			}
 
 			mt.status = ctx.nextStatus
 			mt.recommendedChannel = nil
-
-			glog.V(1).Infof("ChannelId: \"%s\" %s use %s channel", m.ChannelID, ctx.team, vCh.Name)
+			glog.V(info).Infof(
+				"Channel \"%s\": \"%s\" use \"%s\" channel",
+				mt.tCh.Name,
+				ctx.team,
+				vCh.Name,
+			)
 			b.session.ChannelMessageSend(
 				m.ChannelID,
 				ctx.confirmMsg.Format(vCh.Name),
@@ -403,8 +433,8 @@ func (b *Bot) handleVChSettingMessage(mt *Match, m *dg.MessageCreate) {
 			return
 		}
 	}
-	glog.Infof("ChannelID: \"%s\" Message ignore", m.ChannelID)
-	glog.V(5).Infof("%s send trash message! lol", m.Author.Username)
+	glog.V(info).Infof("Channel: \"%s\": Message ignore", b.getChannelName(m.ChannelID))
+	glog.V(info).Infof("\"%s\" sent trash message! lol", m.Author.Username)
 	b.session.ChannelMessageSend(
 		m.ChannelID,
 		"？",
@@ -430,17 +460,17 @@ func (b *Bot) Run() {
 
 	err = b.session.Open()
 	if err != nil {
-		glog.Errorln("Cannot open session")
+		glog.Fatalln("Cannot open session")
 		return
 	}
-	glog.V(5).Infoln("Session started")
+	glog.V(info).Infoln("Session started")
 
 	defer func() {
 		err := b.session.Close()
 		if err != nil {
 			glog.Fatal("Cannot close session")
 		}
-		glog.V(1).Infoln("Session closed")
+		glog.V(info).Infoln("Session closed")
 		os.Exit(0)
 	}()
 
@@ -448,14 +478,15 @@ func (b *Bot) Run() {
 
 	signal.Notify(stopBot, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
-	glog.V(1).Infoln("Bot started")
+	glog.V(info).Infoln("Bot started")
 	<-stopBot
 }
 
 func (b *Bot) onMessageCreate(s *dg.Session, m *dg.MessageCreate) {
-	glog.V(5).Infof("ChannelID: \"%s\" Get message", m.ChannelID)
+	glog.V(debug).Infof("Channel \"%s\": Get message", b.getChannelName(m.ChannelID))
+
 	if m.Author.ID == s.State.User.ID {
-		glog.V(5).Infoln("Ignore self message")
+		glog.V(debug).Infoln("Ignore self message")
 		return
 	}
 
@@ -468,7 +499,7 @@ func (b *Bot) onMessageCreate(s *dg.Session, m *dg.MessageCreate) {
 			b.cmdExit(m)
 			return
 		} else if hasKeyword(`help`, m.Content) {
-			b.cmdHelp((m))
+			b.cmdHelp(m)
 			return
 		} else if hasKeyword(`reset`, m.Content) {
 			b.cmdStart(m)
@@ -480,10 +511,10 @@ func (b *Bot) onMessageCreate(s *dg.Session, m *dg.MessageCreate) {
 	// Handle message if setting voice channel state
 	mt, err := b.getMatchByTChID(m.ChannelID)
 	if errors.Is(err, b.errors.MatchNotFound) {
-		glog.V(5).Info("Ignore message to channel that don't have match")
+		glog.V(info).Infof("Channel \"%s\": Ignore message because %s", b.getChannelName(m.ChannelID), err)
 		return
 	} else if err != nil {
-		glog.Errorf("ChannelID: \"%s\" Cannot get match because %s\n", m.ChannelID, err)
+		glog.Errorf("Channel \"%s\": Ignore message because %s", b.getChannelName(m.ChannelID), err)
 		return
 	}
 
@@ -503,32 +534,37 @@ func (b *Bot) onMessageCreate(s *dg.Session, m *dg.MessageCreate) {
 			return
 		}
 	}
-	glog.Warningf("ChannelID: \"%s\" Message \"%s\" is not handled", m.ChannelID, m.ContentWithMentionsReplaced())
+	glog.Warningf("Channel \"%s\": Message \"%s\" is not handled", b.getChannelName(m.ChannelID), m.ContentWithMentionsReplaced())
 }
 
 func (b *Bot) onMessageReaction(s *dg.Session, m *dg.MessageReactionAdd) {
-	glog.V(5).Infof("ChannelID: \"%s\" Get reaction", m.ChannelID)
+	glog.V(debug).Infof("Channel \"%s\": Get reaction", b.getChannelName(m.ChannelID))
+
 	if m.UserID == s.State.User.ID {
-		glog.V(5).Infoln("Ignore self reaction")
+		glog.V(debug).Infoln("Ignore self reaction")
 		return
 	}
 	mt, err := b.getMatchByTChID(m.ChannelID)
 	if err != nil {
-		glog.V(5).Infof("ChannelID: \"%s\" No match exist\n", m.ChannelID)
+		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because %s", b.getChannelName(m.ChannelID), err)
 		return
 	}
 
 	// TODO: Make listening message have callback that handle reaction
 	if mt.listeningMessage == nil || mt.listeningMessage.ID != m.MessageID {
-		glog.V(5).Infof("ChannelID: \"%s\" Ignore reaction on non listening message", m.ChannelID)
+		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because message is not listened", mt.tCh.Name)
 		return
 	}
 
 	if mt.status == vCh1Setting {
 		if m.Emoji.Name == Stamp["y"] {
-			glog.V(5).Infof("ChannelID: \"%s\" Select yes", m.ChannelID)
+			glog.V(debug).Infof("Channel \"%s\": Select yes", mt.tCh.Name)
 			if mt.recommendedChannel == nil {
-				glog.Errorln("Recommend Channel is nil")
+				glog.Errorf("Channel \"%s\": Recommend channel is nil", mt.tCh.Name)
+				b.session.ChannelMessageSend(
+					m.ChannelID,
+					b.messages.UnknownError.Format(mt.recommendedChannel.Name),
+				)
 				return
 			}
 
@@ -544,7 +580,7 @@ func (b *Bot) onMessageReaction(s *dg.Session, m *dg.MessageReactionAdd) {
 				)
 				return
 			} else if err != nil {
-				glog.Errorf("Cannot set voice channel because %s\n", err)
+				glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", mt.tCh.Name, err)
 				return
 			}
 
@@ -560,8 +596,9 @@ func (b *Bot) onMessageReaction(s *dg.Session, m *dg.MessageReactionAdd) {
 				m.ChannelID,
 				b.messages.AskTeam2VCh.Format(),
 			)
-			glog.V(5).Infof(
-				"Team1 use %s channel in %s's match",
+			glog.V(info).Infof(
+				"Channel \"%s\": Team1 use \"%s\" channel in \"%s\"'s match",
+				mt.tCh.Name,
 				mt.team1VCh.Name,
 				mt.tCh.Name,
 			)
@@ -569,7 +606,7 @@ func (b *Bot) onMessageReaction(s *dg.Session, m *dg.MessageReactionAdd) {
 		}
 		if m.Emoji.Name == Stamp["n"] {
 			mt.listeningMessage = nil
-			glog.V(5).Infof("ChannelID: \"%s\" Select no", m.ChannelID)
+			glog.V(debug).Infof("Channel \"%s\": Select no", mt.tCh.Name)
 			b.session.ChannelMessageSend(
 				m.ChannelID,
 				b.messages.RequestChName.Format(),
@@ -577,23 +614,23 @@ func (b *Bot) onMessageReaction(s *dg.Session, m *dg.MessageReactionAdd) {
 			return
 		}
 	}
-	glog.Warningf("ChannelID: \"%s\" Reaction \"%s\" is not handled", m.ChannelID, m.Emoji.Name)
+	glog.Warningf("Channel \"%s\": Reaction \"%s\" is not handled", b.getChannelName(m.ChannelID), m.Emoji.Name)
 }
 
-func (b *Bot) onEnable(guildID string) {
-	chs, err := b.session.GuildChannels(guildID)
+func (b *Bot) onEnable(g *dg.Guild) {
+	chs, err := b.session.GuildChannels(g.ID)
 	if err != nil {
-		glog.Errorf("Cannot get channels in guildID: %s\n")
+		glog.Errorf("GuildID %s: Cannot get channels", g.ID)
 		return
 	}
 	if len(chs) == 0 {
-		glog.V(5).Infof("GuildID:\"%s\" has no channel\n", guildID)
+		glog.V(debug).Infof("Guild \"%s\": has no channel", g.Name)
 		return
 	}
 
 	tChs := b.filterChannelsByType(chs, dg.ChannelTypeGuildText)
 	if len(tChs) == 0 {
-		glog.Warningf("GuildID:\" %s\" has no text channel\n", guildID)
+		glog.Warningf("Guild \"%s\": has no text channel", g.Name)
 		return
 	}
 	_, err = b.session.ChannelMessageSend(
@@ -601,13 +638,13 @@ func (b *Bot) onEnable(guildID string) {
 		b.messages.Help.Format(),
 	)
 	if err != nil {
-		glog.Errorf("Cannot send hello message because %s\n", err)
+		glog.Errorf("Channel \"%s\": Cannot send hello message because %s", b.getChannelName(tChs[0].ID), err)
 		return
 	}
-	glog.V(5).Infof("Send hello to \"%s\" channel in guildID: \"%s\"\n", tChs[0].Name, guildID)
+	glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tChs[0].Name)
 }
 
-func (b *Bot) startMatch(m *dg.MessageCreate) (*Match, error) {
+func (b *Bot) createMatch(m *dg.MessageCreate) (*Match, error) {
 	ch, err := b.session.State.Channel(m.ChannelID)
 	if err != nil {
 		return nil, err
@@ -639,7 +676,6 @@ func (b *Bot) exitMatch(m *dg.MessageCreate) error {
 			b.matches[i] = b.matches[len(b.matches)-1]
 			b.matches[len(b.matches)-1] = nil
 			b.matches = b.matches[:len(b.matches)-1]
-			glog.V(5).Infof("ChannelID: \"%s\" match has deleted", m.ChannelID)
 			return nil
 		}
 	}
@@ -649,14 +685,28 @@ func (b *Bot) exitMatch(m *dg.MessageCreate) error {
 func (b *Bot) makeTeam(mt *Match) {
 	g, err := b.session.State.Guild(mt.tCh.GuildID)
 	if err != nil {
-		glog.Error("Cannot get guild")
+		glog.Errorf("Channel \"%s\": Cannot get guild", mt.tCh.Name)
 		return
 	}
-	chAndVss, _ := b.channelWithVoiceState([]*dg.Channel{mt.team1VCh, mt.team2VCh}, g.VoiceStates)
+
+	chAndVss, err := b.packChannelsAndVoiceStates([]*dg.Channel{mt.team1VCh, mt.team2VCh}, g.VoiceStates)
+	if err != nil {
+		glog.Errorf("Channel \"%s\": Cannot pack channels and voice states because %s", mt.tCh.Name, err)
+		b.session.ChannelMessageSend(
+			mt.tCh.ID,
+			b.messages.UnknownError.Format(),
+		)
+		return
+	}
 	if len(chAndVss) != 2 {
-		glog.Error("Cannot get voice state")
+		glog.Errorf("Channel \"%s\": Cannot get voice state", mt.tCh.Name)
+		b.session.ChannelMessageSend(
+			mt.tCh.ID,
+			b.messages.UnknownError.Format(),
+		)
 		return
 	}
+
 	b.session.ChannelMessageSend(
 		mt.tCh.ID,
 		b.messages.MakeTeam.Format(mt.team1VCh.Name, mt.team2VCh.Name),
@@ -697,10 +747,26 @@ func (b *Bot) previewTeam(mt *Match) {
 
 func (b *Bot) movePlayers(mt *Match) {
 	for _, p := range mt.team1 {
-		b.session.GuildMemberMove(mt.tCh.GuildID, p.DiscordId, &mt.team1VCh.ID)
+		err := b.session.GuildMemberMove(mt.tCh.GuildID, p.DiscordId, &mt.team1VCh.ID)
+		if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot move member because %s", mt.tCh.Name, err)
+			b.session.ChannelMessageSend(
+				mt.tCh.ID,
+				b.messages.UnknownError.Format(),
+			)
+			return
+		}
 	}
 	for _, p := range mt.team2 {
-		b.session.GuildMemberMove(mt.tCh.GuildID, p.DiscordId, &mt.team2VCh.ID)
+		err := b.session.GuildMemberMove(mt.tCh.GuildID, p.DiscordId, &mt.team2VCh.ID)
+		if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot move member because %s", mt.tCh.Name, err)
+			b.session.ChannelMessageSend(
+				mt.tCh.ID,
+				b.messages.UnknownError.Format(),
+			)
+			return
+		}
 	}
 }
 
