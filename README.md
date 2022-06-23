@@ -1,6 +1,6 @@
 # team-making-bot
 
-Discord bot fot team making
+Discord bot for team making
 
 ## Requirement
 
