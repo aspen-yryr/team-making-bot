@@ -46,7 +46,10 @@ const confirmTeam2VCh = `チームBは%sチャンネルを使用します。`
 const requestChName = `チャンネル名を入力してください。`
 const noVChAvailable = `使用できるボイスチャンネルがありません。`
 const makeTeam = `ボイスチャンネル%sと%sにいるメンバーをチーム分けします。`
-const confirmTeam = `go：ボイスチャンネルを移動
+const confirmTeam = `このチーム分けで良いですか？
+Team A(%s): %v
+Team B(%s): %v
+go：ボイスチャンネルを移動
 shuffle：チーム分けやり直し`
 const conflictVCh = `%sは使用できません。`
 

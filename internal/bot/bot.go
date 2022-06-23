@@ -2,7 +2,6 @@ package bot
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"regexp"
@@ -689,14 +688,10 @@ func (b *Bot) previewTeam(mt *Match) {
 		}
 		return r
 	}
-	namesA, namesB := f(mt.team1), f(mt.team2)
+	names1, names2 := f(mt.team1), f(mt.team2)
 	b.session.ChannelMessageSend(
 		mt.tCh.ID,
-		fmt.Sprintf("Team A: %v\nTeam B: %v\n%s",
-			namesA,
-			namesB,
-			b.messages.ConfirmTeam.Format(),
-		),
+		b.messages.ConfirmTeam.Format(mt.team1VCh.Name, names1, mt.team2VCh.Name, names2),
 	)
 }
 
