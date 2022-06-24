@@ -4,6 +4,12 @@ import (
 	"fmt"
 )
 
+var msgs *Messages
+
+func init() {
+	msgs = NewMessages()
+}
+
 type Message struct {
 	format *string
 	MessageFormatter

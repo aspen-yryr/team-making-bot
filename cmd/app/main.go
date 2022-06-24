@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const defaultEnvFile = "./env/dev.env"
+const defaultEnvFile = "./env/.env"
 
 func main() {
 	e := flag.String("env_file", defaultEnvFile, "env variables definition file")
@@ -17,7 +17,7 @@ func main() {
 
 	err := godotenv.Load(*e)
 	if err != nil {
-		glog.Error("Cannot load" + *e + "file")
+		glog.Error("Cannot load \"" + *e + "\" file")
 		return
 	}
 	apiKey := os.Getenv("DISCORD_BOT_KEY")

@@ -4,6 +4,12 @@ import (
 	"errors"
 )
 
+var ers *Errors
+
+func init() {
+	ers = NewErrors()
+}
+
 type Errors struct {
 	Unknown,
 	InvalidArgument,
