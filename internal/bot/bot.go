@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"regexp"
 	"syscall"
+	"team-making-bot/internal/constants"
+	"team-making-bot/internal/match"
 	"team-making-bot/pkg/discord"
 
 	dg "github.com/bwmarrin/discordgo"
@@ -13,7 +15,8 @@ import (
 )
 
 var ds *discord.Session
-var du *discord.Utility
+var msgs = constants.Msgs
+var errs = constants.Errs
 
 const (
 	info  = 1
@@ -38,13 +41,13 @@ var Stamp = map[string]string{
 
 type Bot struct {
 	apiKey string
-	mts    *matches
+	mts    *match.Manager
 }
 
 func New(apiKey string) *Bot {
 	return &Bot{
 		apiKey: apiKey,
-		mts:    newMatches(),
+		mts:    match.NewMatches(),
 	}
 }
 
@@ -117,8 +120,8 @@ func (b *Bot) onMessageCreate(_ *dg.Session, m *dg.MessageCreate) {
 	}
 
 	// Handle message if match started on channel
-	st, err := b.mts.getMatchStatus(m.ChannelID)
-	if errors.Is(err, ers.MatchNotFound) {
+	st, err := b.mts.GetMatchStatus(m.ChannelID)
+	if errors.Is(err, errs.MatchNotFound) {
 		glog.V(info).Infof("Channel \"%s\": can't get match status", *ds.ChannelUnsafe(m.ChannelID), err)
 		return
 	}
@@ -128,18 +131,18 @@ func (b *Bot) onMessageCreate(_ *dg.Session, m *dg.MessageCreate) {
 		return
 	}
 
-	if *st == vCh1Setting || *st == vCh2Setting {
+	if *st == match.StateVCh1Setting || *st == match.StateVCh2Setting {
 		b.handleVChSettingMessage(m.ChannelID, m.Content, *st)
 		return
 	}
 
-	if *st == teamPreview {
+	if *st == match.StateTeamPreview {
 		// TODO: declare keyword as constant
 		if hasKeyword(`shuffle`, m.Content) {
 			b.cmdShuffle(m)
 			return
 		} else if hasKeyword(`go`, m.Content) {
-			err := b.mts.movePlayers(m.ChannelID)
+			err := b.movePlayers(m.ChannelID)
 			if err != nil {
 				glog.Errorf("Channel \"%s\": can't move player %v", err)
 				return
@@ -157,23 +160,25 @@ func (b *Bot) onMessageReaction(_ *dg.Session, m *dg.MessageReactionAdd) {
 		glog.V(debug).Infoln("Ignore self reaction")
 		return
 	}
-	mt, err := b.mts.getMatchByTChID(m.ChannelID)
+
+	mt, err := b.mts.GetMatchByTChID(m.ChannelID)
 	if err != nil {
 		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because %s", *ds.ChannelUnsafe(m.ChannelID), err)
 		return
 	}
 
 	// TODO: Make listening message have callback that handle reaction
-	if mt.listeningMessage == nil || mt.listeningMessage.ID != m.MessageID {
-		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because message is not listened", mt.tch.Name)
+	if !b.mts.IsListeningMessage(m.ChannelID, m.MessageID) {
+		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because message is not listened", *ds.ChannelUnsafe(m.ChannelID))
 		return
 	}
 
-	if mt.status == vCh1Setting {
+	if mt.StatusIs(match.StateVCh1Setting) {
 		if m.Emoji.Name == Stamp["y"] {
-			glog.V(debug).Infof("Channel \"%s\": Select yes", mt.tch.Name)
-			if mt.recommendedChannel == nil {
-				glog.Errorf("Channel \"%s\": Recommend channel is nil", mt.tch.Name)
+			glog.V(debug).Infof("Channel \"%s\": Select yes", *ds.ChannelUnsafe(m.ChannelID))
+			vch, err := mt.GetRecommendedChannel()
+			if err != nil {
+				glog.Errorf("Channel \"%s\": can't get recommended channel", *ds.ChannelUnsafe(m.ChannelID))
 				ds.ChannelMessageSend(
 					m.ChannelID,
 					msgs.UnknownError.Format(),
@@ -181,42 +186,40 @@ func (b *Bot) onMessageReaction(_ *dg.Session, m *dg.MessageReactionAdd) {
 				return
 			}
 
-			err = b.mts.setVCh(m.ChannelID, mt.recommendedChannel, "Team1")
-			if err == ers.ConflictVCh {
+			err = b.mts.SetVCh(m.ChannelID, vch, "Team1")
+			if err == errs.ConflictVCh {
 				ds.ChannelMessageSend(
 					m.ChannelID,
-					msgs.ConflictVCh.Format(mt.recommendedChannel.Name),
+					msgs.ConflictVCh.Format(vch.Name),
 				)
 				ds.ChannelMessageSend(m.ChannelID, msgs.AskTeam1VCh.Format())
 				return
 			} else if err != nil {
-				glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", mt.tch.Name, err)
+				glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", *ds.ChannelUnsafe(m.ChannelID), err)
 				return
 			}
 
-			mt.status = vCh2Setting
-			mt.recommendedChannel = nil
-			mt.listeningMessage = nil
+			// mt.status = match.StateVCh2Setting
+			// mt.recommendedChannel = nil
+			// mt.listeningMessage = nil
 
 			ds.ChannelMessageSend(
 				m.ChannelID,
-				msgs.ConfirmTeam1VCh.Format(mt.team1VCh.Name),
+				msgs.ConfirmTeam1VCh.Format(vch.Name),
 			)
 			ds.ChannelMessageSend(
 				m.ChannelID,
 				msgs.AskTeam2VCh.Format(),
 			)
 			glog.V(info).Infof(
-				"Channel \"%s\": Team1 use \"%s\" channel in \"%s\"'s match",
-				mt.tch.Name,
-				mt.team1VCh.Name,
-				mt.tch.Name,
+				"Channel \"%s\": Team1 use \"%s\" channel",
+				*ds.ChannelUnsafe(m.ChannelID),
+				vch.Name,
 			)
 			return
 		}
 		if m.Emoji.Name == Stamp["n"] {
-			mt.listeningMessage = nil
-			glog.V(debug).Infof("Channel \"%s\": Select no", mt.tch.Name)
+			glog.V(debug).Infof("Channel \"%s\": Select no", *ds.ChannelUnsafe(m.ChannelID))
 			ds.ChannelMessageSend(
 				m.ChannelID,
 				msgs.RequestChName.Format(),
@@ -238,7 +241,7 @@ func (b *Bot) onEnable(g *dg.Guild) {
 		return
 	}
 
-	tChs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
+	tChs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
 	if len(tChs) == 0 {
 		glog.Warningf("Guild \"%s\": has no text channel", g.Name)
 		return
@@ -255,8 +258,17 @@ func (b *Bot) onEnable(g *dg.Guild) {
 }
 
 func (b *Bot) cmdStart(m *dg.MessageCreate) {
-	mt, err := b.mts.createMatch(m.ChannelID)
-	if errors.Is(err, ers.MatchAlreadyStarted) {
+	tch, err := ds.State.Channel(m.ChannelID)
+	if err != nil {
+		glog.Errorf("can't get channel: %v", err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.UnknownError.Format(),
+		)
+		return
+	}
+	_, err = b.mts.CreateMatch(tch)
+	if errors.Is(err, errs.MatchAlreadyStarted) {
 		glog.Warningf("Channel \"%s\": Match already started", *ds.ChannelUnsafe(m.ChannelID))
 		ds.ChannelMessageSend(
 			m.ChannelID,
@@ -273,27 +285,27 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 	}
 
 	err = b.recommendChannel(m.ChannelID)
-	if errors.Is(err, ers.NoAvailableVCh) {
-		glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", mt.tch.Name, err)
+	if errors.Is(err, errs.NoAvailableVCh) {
+		glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", *ds.ChannelUnsafe(m.ChannelID), err)
 		ds.ChannelMessageSend(
 			m.ChannelID,
 			msgs.NoVChAvailable.Format(),
 		)
 		return
 	} else if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", mt.tch.Name, err)
+		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", *ds.ChannelUnsafe(m.ChannelID), err)
 		ds.ChannelMessageSend(
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
 		return
 	}
-	glog.V(debug).Infof("Channel \"%s\": Match started", mt.tch.Name)
+	glog.V(debug).Infof("Channel \"%s\": Match started", *ds.ChannelUnsafe(m.ChannelID))
 }
 
 func (b *Bot) cmdExit(m *dg.MessageCreate) {
-	err := b.mts.removeMatch(m.ChannelID)
-	if errors.Is(err, ers.MatchNotFound) {
+	err := b.mts.RemoveMatch(m.ChannelID)
+	if errors.Is(err, errs.MatchNotFound) {
 		glog.Warningf("Channel \"%s\": Match not found", *ds.ChannelUnsafe(m.ChannelID))
 		return
 	} else if err != nil {
@@ -328,13 +340,17 @@ func (b *Bot) cmdHelp(m *dg.MessageCreate) {
 }
 
 func (b *Bot) cmdShuffle(m *dg.MessageCreate) {
-	err := b.mts.makeTeam(m.ChannelID)
+	g, err := ds.State.Guild(m.GuildID)
 	if err != nil {
-		glog.Errorf("Cannot make team: %v", err)
-
+		glog.Errorf("Channel \"%s\": Cannot get guild", *ds.ChannelUnsafe(m.ChannelID))
 		return
 	}
-	err = b.mts.previewTeam(m.ChannelID)
+	err = b.mts.ShuffleTeam(m.ChannelID, g.VoiceStates)
+	if err != nil {
+		glog.Errorf("Cannot shuffle team: %v", err)
+		return
+	}
+	err = b.previewTeam(m.ChannelID)
 	if err != nil {
 		glog.Errorf("Cannot preview team: %v", err)
 		ds.ChannelMessageSend(
@@ -345,22 +361,23 @@ func (b *Bot) cmdShuffle(m *dg.MessageCreate) {
 	}
 }
 
-func (b *Bot) handleVChSettingMessage(tchID, content string, st Status) {
+func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 	tch, err := ds.State.Channel(tchID)
 	if err != nil {
 		glog.Errorf("Channel %s: Cannot get channel: %v", tchID, err)
 		return
 	}
+
 	ctx := &struct {
 		team       string
-		askMsg     *Message
-		confirmMsg *Message
+		askMsg     *constants.Message
+		confirmMsg *constants.Message
 	}{
 		"Team1",
 		msgs.AskTeam1VCh,
 		msgs.ConfirmTeam1VCh,
 	}
-	if st == vCh2Setting {
+	if st == match.StateVCh2Setting {
 		ctx.team = "Team2"
 		ctx.askMsg = msgs.AskTeam2VCh
 		ctx.confirmMsg = msgs.ConfirmTeam2VCh
@@ -371,12 +388,12 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st Status) {
 		glog.Errorf("Channel \"%s\": Cannot get guild channels", tch.Name)
 		return
 	}
-	vChs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
+	vChs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
 
 	for _, vch := range vChs {
 		if hasKeyword(vch.Name, content) {
-			err := b.mts.setVCh(tchID, vch, ctx.team)
-			if errors.Is(err, ers.ConflictVCh) {
+			err := b.mts.SetVCh(tchID, vch, ctx.team)
+			if errors.Is(err, errs.ConflictVCh) {
 				ds.ChannelMessageSend(tchID, msgs.ConflictVCh.Format(vch.Name))
 				ds.ChannelMessageSend(tchID, ctx.askMsg.Format())
 				glog.Warningf("Channel \"%s\": Conflict voice channel", tch.Name)
@@ -394,15 +411,23 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st Status) {
 			)
 			ds.ChannelMessageSend(tchID, ctx.confirmMsg.Format(vch.Name))
 
-			if st == vCh1Setting {
+			if st == match.StateVCh1Setting {
 				ds.ChannelMessageSend(tchID, msgs.AskTeam2VCh.Format())
-			} else if st == vCh2Setting {
-				err := b.mts.makeTeam(tchID)
+			} else if st == match.StateVCh2Setting {
+				g, err := ds.State.Guild(tch.GuildID)
 				if err != nil {
-					glog.Errorf("Cannot make team: %v", err)
+					glog.Errorf("can't get guild: $v", err)
 					return
 				}
-				err = b.mts.previewTeam(tchID)
+				if len(g.VoiceStates) != 0 {
+					err = b.mts.ShuffleTeam(tchID, g.VoiceStates)
+					if err != nil {
+						glog.Errorf("can't shuffle team: %v", err)
+						return
+					}
+				}
+
+				err = b.previewTeam(tchID)
 				if err != nil {
 					glog.Errorf("Cannot preview team: %v", err)
 					ds.ChannelMessageSend(
@@ -431,19 +456,11 @@ func (b *Bot) recommendChannel(tchID string) error {
 		return err
 	}
 
-	vChs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
-
-	availableVChs := []*dg.Channel{}
-	usingVchNames := du.Channels2IDs(b.mts.getUsingVCh())
-	for _, vCh := range vChs {
-		if !isContain(vCh.ID, usingVchNames) {
-			availableVChs = append(availableVChs, vCh)
-		}
-	}
+	availableVChs := b.mts.FilterAvailableVCh(chs)
 
 	glog.V(trace).Infof("availableVChs: %+v", availableVChs)
 	if len(availableVChs) == 0 {
-		return ers.NoAvailableVCh
+		return errs.NoAvailableVCh
 	}
 
 	g, err := ds.State.Guild(tch.GuildID)
@@ -453,7 +470,7 @@ func (b *Bot) recommendChannel(tchID string) error {
 
 	var vCh *dg.Channel
 	if len(g.VoiceStates) > 0 {
-		vCh, err = du.GetMostPeopleVCh(availableVChs, g.VoiceStates)
+		vCh, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
 		if err != nil {
 			return err
 		}
@@ -465,7 +482,7 @@ func (b *Bot) recommendChannel(tchID string) error {
 		vCh = availableVChs[0]
 	}
 
-	err = b.mts.setRecommendedChannel(tchID, vCh)
+	err = b.mts.SetRecommendedChannel(tchID, vCh)
 	if err != nil {
 		return err
 	}
@@ -486,16 +503,61 @@ func (b *Bot) recommendChannel(tchID string) error {
 	if err != nil {
 		glog.Errorln(err)
 	}
-	err = b.mts.setListeningMessage(tchID, msg)
+	err = b.mts.SetListeningMessage(tchID, msg)
 	if err != nil {
 		glog.Errorf("Channel %s: Can't set listening message: %v", tch.Name, err)
-		ds.ChannelMessageSend(
-			tch.ID,
-			msgs.UnknownError.Format(),
-		)
+		ds.ChannelMessageSend(tch.ID, msgs.UnknownError.Format())
 		return err
 	}
 
+	return nil
+}
+
+func (b *Bot) movePlayers(tchID string) error {
+	mt, err := b.mts.GetMatchByTChID(tchID)
+	if err != nil {
+		return err
+	}
+
+	team1, team2 := b.mts.GetTeam(tchID)
+
+	for _, p := range team1 {
+		err := ds.GuildMemberMove(mt.GetGuildId(), p, &mt.Team1VCh.ID)
+		if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot move member because %s", *ds.ChannelUnsafe(tchID), err)
+			ds.ChannelMessageSend(tchID, msgs.UnknownError.Format())
+			return err
+		}
+	}
+	for _, p := range team2 {
+		err := ds.GuildMemberMove(mt.GetGuildId(), p, &mt.Team2VCh.ID)
+		if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot move member because %s", *ds.ChannelUnsafe(tchID), err)
+			ds.ChannelMessageSend(tchID, msgs.UnknownError.Format())
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Bot) previewTeam(tchID string) error {
+	ids1, ids2 := b.mts.GetTeam(tchID)
+	mt, err := b.mts.GetMatchByTChID(tchID)
+	if err != nil {
+		return err
+	}
+	f := func(ids []string) []string {
+		r := []string{}
+		for _, id := range ids {
+			u, _ := ds.User(id)
+			r = append(r, u.Username)
+		}
+		return r
+	}
+	ds.ChannelMessageSend(
+		tchID,
+		msgs.ConfirmTeam.Format(mt.Team1VCh.Name, f(ids1), mt.Team2VCh.Name, f(ids2)),
+	)
 	return nil
 }
 

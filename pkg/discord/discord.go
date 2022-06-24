@@ -8,6 +8,7 @@ import (
 
 type Session struct {
 	*dg.Session
+	*Utility
 }
 
 type ChWithVss struct {
@@ -19,7 +20,7 @@ type Utility struct {
 }
 
 func New(s *dg.Session) *Session {
-	return &Session{s}
+	return &Session{s, &Utility{}}
 }
 
 // No error handling

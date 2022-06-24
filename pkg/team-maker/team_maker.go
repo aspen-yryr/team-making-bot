@@ -8,7 +8,6 @@ import (
 type Player struct {
 	DiscordId string
 	GameId    string
-	Name      string
 }
 
 type TeamMaker interface {

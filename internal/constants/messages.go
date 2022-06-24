@@ -1,13 +1,13 @@
-package bot
+package constants
 
 import (
 	"fmt"
 )
 
-var msgs *Messages
+var Msgs *Messages
 
 func init() {
-	msgs = NewMessages()
+	Msgs = NewMessages()
 }
 
 type Message struct {

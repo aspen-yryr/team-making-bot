@@ -1,13 +1,13 @@
-package bot
+package constants
 
 import (
 	"errors"
 )
 
-var ers *Errors
+var Errs *Errors
 
 func init() {
-	ers = NewErrors()
+	Errs = NewErrors()
 }
 
 type Errors struct {
