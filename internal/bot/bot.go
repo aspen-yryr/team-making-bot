@@ -92,7 +92,6 @@ func (b *Bot) Run() {
 	<-stopBot
 }
 
-// matchに依存しないように書き換える．manageをifにする
 func (b *Bot) onMessageCreate(_ *dg.Session, m *dg.MessageCreate) {
 	glog.V(debug).Infof("Channel \"%s\": Get message", *ds.ChannelUnsafe(m.ChannelID))
 
@@ -119,7 +118,6 @@ func (b *Bot) onMessageCreate(_ *dg.Session, m *dg.MessageCreate) {
 		}
 	}
 
-	// Handle message if match started on channel
 	st, err := b.mts.GetMatchStatus(m.ChannelID)
 	if errors.Is(err, errs.MatchNotFound) {
 		glog.V(info).Infof("Channel \"%s\": can't get match status", *ds.ChannelUnsafe(m.ChannelID), err)
@@ -167,69 +165,76 @@ func (b *Bot) onMessageReaction(_ *dg.Session, m *dg.MessageReactionAdd) {
 		return
 	}
 
+	st, err := b.mts.GetMatchStatus(m.ChannelID)
+	if errors.Is(err, errs.MatchNotFound) {
+		glog.V(info).Infof("Channel \"%s\": can't get match status", *ds.ChannelUnsafe(m.ChannelID), err)
+		return
+	}
+	if err != nil {
+		glog.Errorf("Channel \"%s\": can't get match status", *ds.ChannelUnsafe(m.ChannelID), err)
+		// Don't send message to user because avoid be troll
+		return
+	}
+	if *st != match.StateVCh1Setting {
+		return
+	}
+
 	// TODO: Make listening message have callback that handle reaction
 	if !b.mts.IsListeningMessage(m.ChannelID, m.MessageID) {
 		glog.V(debug).Infof("Channel \"%s\": Ignore reaction because message is not listened", *ds.ChannelUnsafe(m.ChannelID))
 		return
 	}
 
-	if mt.StatusIs(match.StateVCh1Setting) {
-		if m.Emoji.Name == Stamp["y"] {
-			glog.V(debug).Infof("Channel \"%s\": Select yes", *ds.ChannelUnsafe(m.ChannelID))
-			vch, err := mt.GetRecommendedChannel()
-			if err != nil {
-				glog.Errorf("Channel \"%s\": can't get recommended channel", *ds.ChannelUnsafe(m.ChannelID))
-				ds.ChannelMessageSend(
-					m.ChannelID,
-					msgs.UnknownError.Format(),
-				)
-				return
-			}
-
-			err = b.mts.SetVCh(m.ChannelID, vch, "Team1")
-			if err == errs.ConflictVCh {
-				ds.ChannelMessageSend(
-					m.ChannelID,
-					msgs.ConflictVCh.Format(vch.Name),
-				)
-				ds.ChannelMessageSend(m.ChannelID, msgs.AskTeam1VCh.Format())
-				return
-			} else if err != nil {
-				glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", *ds.ChannelUnsafe(m.ChannelID), err)
-				return
-			}
-
-			// mt.status = match.StateVCh2Setting
-			// mt.recommendedChannel = nil
-			// mt.listeningMessage = nil
-
+	if m.Emoji.Name == Stamp["y"] {
+		glog.V(debug).Infof("Channel \"%s\": Select yes", *ds.ChannelUnsafe(m.ChannelID))
+		vch, err := mt.GetRecommendedChannel()
+		if err != nil {
+			glog.Errorf("Channel \"%s\": can't get recommended channel", *ds.ChannelUnsafe(m.ChannelID))
 			ds.ChannelMessageSend(
 				m.ChannelID,
-				msgs.ConfirmTeam1VCh.Format(vch.Name),
-			)
-			ds.ChannelMessageSend(
-				m.ChannelID,
-				msgs.AskTeam2VCh.Format(),
-			)
-			glog.V(info).Infof(
-				"Channel \"%s\": Team1 use \"%s\" channel",
-				*ds.ChannelUnsafe(m.ChannelID),
-				vch.Name,
+				msgs.UnknownError.Format(),
 			)
 			return
 		}
-		if m.Emoji.Name == Stamp["n"] {
-			glog.V(debug).Infof("Channel \"%s\": Select no", *ds.ChannelUnsafe(m.ChannelID))
+
+		err = b.mts.SetVCh(m.ChannelID, vch, "Team1")
+		if err == errs.ConflictVCh {
 			ds.ChannelMessageSend(
 				m.ChannelID,
-				msgs.RequestChName.Format(),
+				msgs.ConflictVCh.Format(vch.Name),
 			)
+			ds.ChannelMessageSend(m.ChannelID, msgs.AskTeam1VCh.Format())
+			return
+		} else if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot set voice channel because %s", *ds.ChannelUnsafe(m.ChannelID), err)
 			return
 		}
+
+		glog.V(info).Infof(
+			"Channel \"%s\": Team1 use \"%s\" channel",
+			*ds.ChannelUnsafe(m.ChannelID),
+			vch.Name,
+		)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.ConfirmTeam1VCh.Format(vch.Name),
+		)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.AskTeam2VCh.Format(),
+		)
+		return
+	}
+	if m.Emoji.Name == Stamp["n"] {
+		glog.V(debug).Infof("Channel \"%s\": Select no", *ds.ChannelUnsafe(m.ChannelID))
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.RequestChName.Format(),
+		)
+		return
 	}
 	glog.Warningf("Channel \"%s\": Reaction \"%s\" is not handled", *ds.ChannelUnsafe(m.ChannelID), m.Emoji.Name)
 }
-
 func (b *Bot) onEnable(g *dg.Guild) {
 	chs, err := ds.GuildChannels(g.ID)
 	if err != nil {
@@ -241,20 +246,20 @@ func (b *Bot) onEnable(g *dg.Guild) {
 		return
 	}
 
-	tChs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
-	if len(tChs) == 0 {
+	tchs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
+	if len(tchs) == 0 {
 		glog.Warningf("Guild \"%s\": has no text channel", g.Name)
 		return
 	}
 	_, err = ds.ChannelMessageSend(
-		tChs[0].ID,
+		tchs[0].ID,
 		msgs.Help.Format(),
 	)
 	if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot send hello message because %s", *ds.ChannelUnsafe(tChs[0].ID), err)
+		glog.Errorf("Channel \"%s\": Cannot send hello message because %s", *ds.ChannelUnsafe(tchs[0].ID), err)
 		return
 	}
-	glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tChs[0].Name)
+	glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tchs[0].Name)
 }
 
 func (b *Bot) cmdStart(m *dg.MessageCreate) {
@@ -388,9 +393,9 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 		glog.Errorf("Channel \"%s\": Cannot get guild channels", tch.Name)
 		return
 	}
-	vChs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
+	vchs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
 
-	for _, vch := range vChs {
+	for _, vch := range vchs {
 		if hasKeyword(vch.Name, content) {
 			err := b.mts.SetVCh(tchID, vch, ctx.team)
 			if errors.Is(err, errs.ConflictVCh) {
@@ -468,28 +473,28 @@ func (b *Bot) recommendChannel(tchID string) error {
 		return err
 	}
 
-	var vCh *dg.Channel
+	var vch *dg.Channel
 	if len(g.VoiceStates) > 0 {
-		vCh, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
+		vch, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
 		if err != nil {
 			return err
 		}
-		if vCh == nil {
-			vCh = availableVChs[0]
+		if vch == nil {
+			vch = availableVChs[0]
 		}
 	} else {
 		glog.Warningf("Guild %s: No voice states", g.Name)
-		vCh = availableVChs[0]
+		vch = availableVChs[0]
 	}
 
-	err = b.mts.SetRecommendedChannel(tchID, vCh)
+	err = b.mts.SetRecommendedChannel(tchID, vch)
 	if err != nil {
 		return err
 	}
 
 	msg, err := ds.ChannelMessageSend(
 		tchID,
-		msgs.AskTeam1VChWithRecommend.Format(vCh.Name),
+		msgs.AskTeam1VChWithRecommend.Format(vch.Name),
 	)
 	if err != nil {
 		return err

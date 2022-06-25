@@ -106,8 +106,8 @@ func (s Session) GetSameGuildChannels(chID string) ([]*dg.Channel, error) {
 	return chs, nil
 }
 
-func (u *Utility) GetMostPeopleVCh(vChs []*dg.Channel, vss []*dg.VoiceState) (*dg.Channel, error) {
-	targets, err := u.PackChannelsAndVoiceStates(vChs, vss)
+func (u *Utility) GetMostPeopleVCh(vchs []*dg.Channel, vss []*dg.VoiceState) (*dg.Channel, error) {
+	targets, err := u.PackChannelsAndVoiceStates(vchs, vss)
 	if err != nil {
 		return nil, fmt.Errorf("can't pack channels and voice states: %v", err)
 	}

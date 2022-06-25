@@ -32,9 +32,7 @@ type Match struct {
 	status             Status
 }
 
-func (m *Match) StatusIs(r Status) bool {
-	return m.status == r
-}
+//TODO: More strictly state management or more get method to nil check
 
 func (m *Match) GetRecommendedChannel() (*dg.Channel, error) {
 	if m.recommendedChannel == nil {
@@ -42,6 +40,7 @@ func (m *Match) GetRecommendedChannel() (*dg.Channel, error) {
 	}
 	return m.recommendedChannel, nil
 }
+
 func (m *Match) GetShuffledIds() ([]string, []string) {
 	f := func(ps []*tm.Player) []string {
 		r := []string{}
@@ -59,23 +58,23 @@ func (m *Match) GetGuildId() string {
 
 type Manager struct {
 	list     []*Match
-	tChMutex sync.RWMutex
-	vChMutex sync.RWMutex
+	tchMutex sync.RWMutex
+	vchMutex sync.RWMutex
 }
 
 func NewMatches() *Manager {
 	return &Manager{
 		list:     []*Match{},
-		tChMutex: sync.RWMutex{},
-		vChMutex: sync.RWMutex{},
+		tchMutex: sync.RWMutex{},
+		vchMutex: sync.RWMutex{},
 	}
 }
 
 func (m *Manager) CreateMatch(tch *dg.Channel) (*Match, error) {
-	m.tChMutex.Lock()
-	defer m.tChMutex.Unlock()
+	m.tchMutex.Lock()
+	defer m.tchMutex.Unlock()
 
-	if isContain(tch.ID, du.Channels2IDs(m.getUsingTCh())) {
+	if isContain(tch.ID, du.Channels2IDs(m.getUsingTCh(false))) {
 		return nil, errs.MatchAlreadyStarted
 	}
 
@@ -88,10 +87,10 @@ func (m *Manager) CreateMatch(tch *dg.Channel) (*Match, error) {
 }
 
 func (m *Manager) RemoveMatch(tchID string) error {
-	m.tChMutex.Lock()
-	defer m.tChMutex.Unlock()
-	m.vChMutex.Lock()
-	defer m.vChMutex.Unlock()
+	m.tchMutex.Lock()
+	defer m.tchMutex.Unlock()
+	m.vchMutex.Lock()
+	defer m.vchMutex.Unlock()
 
 	for i, mt := range m.list {
 		if mt.tch.ID == tchID {
@@ -104,6 +103,48 @@ func (m *Manager) RemoveMatch(tchID string) error {
 	return errs.MatchNotFound
 }
 
+func (m *Manager) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
+	vchs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
+	if len(vchs) == 0 {
+		return []*dg.Channel{}
+	}
+
+	availableVChs := []*dg.Channel{}
+	for _, vch := range vchs {
+		if !isContain(vch.ID, du.Channels2IDs(m.getUsingVCh(true))) {
+			availableVChs = append(availableVChs, vch)
+		}
+	}
+	return availableVChs
+}
+
+func (m *Manager) SetVCh(tchID string, vch *dg.Channel, team string) error {
+	mt, err := m.GetMatchByTChID(tchID)
+	if err != nil {
+		return err
+	}
+
+	m.vchMutex.Lock()
+	defer m.vchMutex.Unlock()
+
+	if isContain(vch.ID, du.Channels2IDs(m.getUsingVCh(false))) {
+		return errs.ConflictVCh
+	}
+
+	if team == "Team1" {
+		mt.Team1VCh = vch
+		mt.status = StateVCh2Setting
+		mt.recommendedChannel = nil
+		return nil
+	} else if team == "Team2" {
+		mt.Team2VCh = vch
+		mt.status = StateTeamPreview
+		mt.recommendedChannel = nil
+		return nil
+	}
+	return errs.InvalidTeam
+}
+
 func (m *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 	mt, err := m.GetMatchByTChID(tchID)
 	if err != nil {
@@ -112,14 +153,6 @@ func (m *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 
 	var chWithVss []*discord.ChWithVss
 	chWithVss, _ = du.PackChannelsAndVoiceStates([]*dg.Channel{mt.Team1VCh, mt.Team2VCh}, vss)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// ds.ChannelMessageSend(
-	// 	mt.tch.ID,
-	// 	msgs.MakeTeam.Format(mt.team1VCh.Name, mt.team2VCh.Name),
-	// )
 
 	players := []*tm.Player{}
 	for _, cv := range chWithVss {
@@ -154,71 +187,7 @@ func (m *Manager) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []s
 	return f(mt.team1), f(mt.team2)
 }
 
-func (m *Manager) SetVCh(tchID string, vch *dg.Channel, team string) error {
-	mt, err := m.GetMatchByTChID(tchID)
-	if err != nil {
-		return err
-	}
-
-	m.vChMutex.Lock()
-	defer m.vChMutex.Unlock()
-
-	if isContain(vch.ID, du.Channels2IDs(m.getUsingVCh())) {
-		return errs.ConflictVCh
-	}
-
-	if team == "Team1" {
-		mt.Team1VCh = vch
-		mt.status = StateVCh2Setting
-		mt.recommendedChannel = nil
-		return nil
-	} else if team == "Team2" {
-		mt.Team2VCh = vch
-		mt.status = StateTeamPreview
-		mt.recommendedChannel = nil
-		return nil
-	}
-	return errs.InvalidTeam
-}
-
-func (m *Manager) getUsingTCh() []*dg.Channel {
-	using := []*dg.Channel{}
-	for _, m := range m.list {
-		if m.tch != nil {
-			using = append(using, m.tch)
-		}
-	}
-	return using
-}
-
-func (m *Manager) getUsingVCh() []*dg.Channel {
-	using := []*dg.Channel{}
-	for _, m := range m.list {
-		if m.Team1VCh != nil {
-			using = append(using, m.Team1VCh)
-		}
-		if m.Team2VCh != nil {
-			using = append(using, m.Team2VCh)
-		}
-	}
-	return using
-}
-
-func (m *Manager) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
-	vChs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
-	if len(vChs) == 0 {
-		return []*dg.Channel{}
-	}
-
-	availableVChs := []*dg.Channel{}
-	for _, vCh := range vChs {
-		if !isContain(vCh.ID, du.Channels2IDs(m.getUsingVCh())) {
-			availableVChs = append(availableVChs, vCh)
-		}
-	}
-	return availableVChs
-}
-
+// use cache if we need more performance (not map)
 func (m *Manager) GetMatchByTChID(tchID string) (*Match, error) {
 	for _, m := range m.list {
 		if m.tch.ID == tchID {
@@ -263,6 +232,30 @@ func (m *Manager) IsListeningMessage(tchID, msgID string) bool {
 		return true
 	}
 	return false
+}
+
+// use cache if we need more performance(not map)
+func (m *Manager) getUsingTCh(lock bool) []*dg.Channel {
+	using := []*dg.Channel{}
+	for _, m := range m.list {
+		if m.tch != nil {
+			using = append(using, m.tch)
+		}
+	}
+	return using
+}
+
+func (m *Manager) getUsingVCh(lock bool) []*dg.Channel {
+	using := []*dg.Channel{}
+	for _, m := range m.list {
+		if m.Team1VCh != nil {
+			using = append(using, m.Team1VCh)
+		}
+		if m.Team2VCh != nil {
+			using = append(using, m.Team2VCh)
+		}
+	}
+	return using
 }
 
 func isContain(s string, list []string) bool {
