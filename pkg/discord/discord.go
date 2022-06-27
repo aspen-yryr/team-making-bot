@@ -23,13 +23,12 @@ func New(s *dg.Session) *Session {
 	return &Session{s, &Utility{}}
 }
 
-// No error handling
-func (s *Session) ChannelUnsafe(chID string) *string {
-	ch, err := s.State.Channel(chID)
+func (s *Session) ChannelUnsafe(chID string) string {
+	ch, err := s.Channel(chID)
 	if err != nil {
-		return nil
+		return ""
 	}
-	return &ch.Name
+	return ch.Name
 }
 
 func (u *Utility) Channels2IDs(chs []*dg.Channel) []string {
