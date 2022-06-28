@@ -42,12 +42,14 @@ var Stamp = map[string]string{
 type Bot struct {
 	apiKey string
 	mts    *match.Manager
+	greet  bool
 }
 
-func New(apiKey string) *Bot {
+func New(apiKey string, greet bool) *Bot {
 	return &Bot{
 		apiKey: apiKey,
 		mts:    match.NewMatches(),
+		greet:  greet,
 	}
 }
 
@@ -245,21 +247,24 @@ func (b *Bot) onEnable(g *dg.Guild) {
 		glog.V(debug).Infof("Guild \"%s\": has no channel", g.Name)
 		return
 	}
-
 	tchs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
 	if len(tchs) == 0 {
 		glog.Warningf("Guild \"%s\": has no text channel", g.Name)
 		return
 	}
-	_, err = ds.ChannelMessageSend(
-		tchs[0].ID,
-		msgs.Help.Format(),
-	)
-	if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot send hello message because %s", *ds.ChannelUnsafe(tchs[0].ID), err)
-		return
+	if b.greet {
+		_, err = ds.ChannelMessageSend(
+			tchs[0].ID,
+			msgs.Help.Format(),
+		)
+		if err != nil {
+			glog.Errorf("Channel \"%s\": Cannot send hello message because %s", *ds.ChannelUnsafe(tchs[0].ID), err)
+			return
+		}
+		glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tchs[0].Name)
+	} else {
+		glog.V(info).Infof("Guild \"%s\": Bot activate in  \"%s\" channel", g.Name, tchs[0].Name)
 	}
-	glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tchs[0].Name)
 }
 
 func (b *Bot) cmdStart(m *dg.MessageCreate) {
