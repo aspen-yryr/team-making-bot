@@ -18,3 +18,4 @@
 .vscode/
 !.env.dev.example
 others/
+.devcontainer
