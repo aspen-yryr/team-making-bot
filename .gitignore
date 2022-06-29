@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+app
 
 # Test binary, built with `go test -c`
 *.test
@@ -18,3 +19,4 @@
 .vscode/
 !.env.dev.example
 others/
+.devcontainer
