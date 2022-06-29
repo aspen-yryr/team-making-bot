@@ -247,6 +247,7 @@ func (b *Bot) onEnable(g *dg.Guild) {
 		glog.V(debug).Infof("Guild \"%s\": has no channel", g.Name)
 		return
 	}
+
 	tchs := ds.FilterChannelsByType(chs, dg.ChannelTypeGuildText)
 	if len(tchs) == 0 {
 		glog.Warningf("Guild \"%s\": has no text channel", g.Name)

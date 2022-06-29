@@ -13,7 +13,7 @@ If you don't have token get from [Discord Developer Portal](https://discord.com/
 Type below command
 
 ```sh
-$ make run_debug
+$ make gen_secret
 ```
 
 and PASTE your bot token along prompt. (Token don't displayed for security)
@@ -52,6 +52,13 @@ Add below configuration to launch.json
 
 ## Run debug (console)
 
+```sh
+$ go run cmd/app/main.go -v 6 -logtostderr --env_file=./env/.env.dev --greet=false
 ```
-go run cmd/app/main.go -v 6 -logtostderr --env_file=./env/.env.dev --greet=false
+
+## Build and run
+
+```sh
+$ make build
+$ make run_build
 ```

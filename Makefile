@@ -13,4 +13,3 @@ build:
 .PHONY: run_build
 run_build:
 	@./app -v 6 -logtostderr --env_file=./env/.env.dev --greet=false
-	
