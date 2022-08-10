@@ -295,7 +295,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		return
 	}
 
-	err = b.recommendChannel(m.ChannelID)
+	err = b.recommendChannel(m.ChannelID, m.Author.ID)
 	if errors.Is(err, errs.NoAvailableVCh) {
 		glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
 		ds.ChannelMessageSend(
@@ -455,7 +455,7 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 	ds.ChannelMessageSend(tchID, "？")
 }
 
-func (b *Bot) recommendChannel(tchID string) error {
+func (b *Bot) recommendChannel(tchID, userID string) error {
 	glog.V(trace).Infoln("recommendChannel called")
 
 	tch, err := ds.Channel(tchID)
@@ -480,18 +480,27 @@ func (b *Bot) recommendChannel(tchID string) error {
 	}
 
 	var vch *dg.Channel
-	if len(g.VoiceStates) > 0 {
-		vch, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
+	for _, vs := range g.VoiceStates {
+		if vs.UserID == userID {
+			vch, err = ds.Channel(vs.ChannelID)
 		if err != nil {
 			return err
 		}
-		if vch == nil {
-			vch = availableVChs[0]
 		}
-	} else {
-		glog.Warningf("Guild %s: No voice states", g.Name)
-		vch = availableVChs[0]
 	}
+
+	// if len(g.VoiceStates) > 0 {
+	// 	vch, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if vch == nil {
+	// 		vch = availableVChs[0]
+	// 	}
+	// } else {
+	// 	glog.Warningf("Guild %s: No voice states", g.Name)
+	// 	vch = availableVChs[0]
+	// }
 
 	err = b.mts.SetRecommendedChannel(tchID, vch)
 	if err != nil {
