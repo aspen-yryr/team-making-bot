@@ -278,7 +278,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		)
 		return
 	}
-	_, err = b.mts.CreateMatch(tch)
+	_, err = b.mts.CreateMatch(tch, m.Author)
 	if errors.Is(err, errs.MatchAlreadyStarted) {
 		glog.Warningf("Channel \"%s\": Match already started", ds.ChannelUnsafe(m.ChannelID))
 		ds.ChannelMessageSend(

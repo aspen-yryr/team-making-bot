@@ -22,6 +22,7 @@ const (
 
 type Match struct {
 	// TODO: dg.channel getter for nil check
+	owner              *dg.User
 	tch                *dg.Channel
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
@@ -70,19 +71,20 @@ func NewMatches() *Manager {
 	}
 }
 
-func (m *Manager) CreateMatch(tch *dg.Channel) (*Match, error) {
-	m.tchMutex.Lock()
-	defer m.tchMutex.Unlock()
+func (mn *Manager) CreateMatch(tch *dg.Channel, user *dg.User) (*Match, error) {
+	mn.tchMutex.Lock()
+	defer mn.tchMutex.Unlock()
 
-	if isContain(tch.ID, du.Channels2IDs(m.getUsingTCh(false))) {
+	if isContain(tch.ID, du.Channels2IDs(mn.getUsingTCh(false))) {
 		return nil, errs.MatchAlreadyStarted
 	}
 
 	mt := &Match{
+		owner:  user,
 		tch:    tch,
 		status: StateVCh1Setting,
 	}
-	m.list = append(m.list, mt)
+	mn.list = append(mn.list, mt)
 	return mt, nil
 }
 
