@@ -88,24 +88,24 @@ func (mn *Manager) CreateMatch(tch *dg.Channel, user *dg.User) (*Match, error) {
 	return mt, nil
 }
 
-func (m *Manager) RemoveMatch(tchID string) error {
-	m.tchMutex.Lock()
-	defer m.tchMutex.Unlock()
-	m.vchMutex.Lock()
-	defer m.vchMutex.Unlock()
+func (mn *Manager) RemoveMatch(tchID string) error {
+	mn.tchMutex.Lock()
+	defer mn.tchMutex.Unlock()
+	mn.vchMutex.Lock()
+	defer mn.vchMutex.Unlock()
 
-	for i, mt := range m.list {
+	for i, mt := range mn.list {
 		if mt.tch.ID == tchID {
-			m.list[i] = m.list[len(m.list)-1]
-			m.list[len(m.list)-1] = nil
-			m.list = m.list[:len(m.list)-1]
+			mn.list[i] = mn.list[len(mn.list)-1]
+			mn.list[len(mn.list)-1] = nil
+			mn.list = mn.list[:len(mn.list)-1]
 			return nil
 		}
 	}
 	return errs.MatchNotFound
 }
 
-func (m *Manager) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
+func (mn *Manager) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
 	vchs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
 	if len(vchs) == 0 {
 		return []*dg.Channel{}
@@ -113,23 +113,23 @@ func (m *Manager) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
 
 	availableVChs := []*dg.Channel{}
 	for _, vch := range vchs {
-		if !isContain(vch.ID, du.Channels2IDs(m.getUsingVCh(true))) {
+		if !isContain(vch.ID, du.Channels2IDs(mn.getUsingVCh(true))) {
 			availableVChs = append(availableVChs, vch)
 		}
 	}
 	return availableVChs
 }
 
-func (m *Manager) SetVCh(tchID string, vch *dg.Channel, team string) error {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) SetVCh(tchID string, vch *dg.Channel, team string) error {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
 
-	m.vchMutex.Lock()
-	defer m.vchMutex.Unlock()
+	mn.vchMutex.Lock()
+	defer mn.vchMutex.Unlock()
 
-	if isContain(vch.ID, du.Channels2IDs(m.getUsingVCh(false))) {
+	if isContain(vch.ID, du.Channels2IDs(mn.getUsingVCh(false))) {
 		return errs.ConflictVCh
 	}
 
@@ -147,8 +147,8 @@ func (m *Manager) SetVCh(tchID string, vch *dg.Channel, team string) error {
 	return errs.InvalidTeam
 }
 
-func (m *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
@@ -173,8 +173,8 @@ func (m *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 	return nil
 }
 
-func (m *Manager) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []string) {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []string) {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return nil, nil
 	}
@@ -190,8 +190,8 @@ func (m *Manager) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []s
 }
 
 // use cache if we need more performance (not map)
-func (m *Manager) GetMatchByTChID(tchID string) (*Match, error) {
-	for _, m := range m.list {
+func (mn *Manager) GetMatchByTChID(tchID string) (*Match, error) {
+	for _, m := range mn.list {
 		if m.tch.ID == tchID {
 			return m, nil
 		}
@@ -199,16 +199,16 @@ func (m *Manager) GetMatchByTChID(tchID string) (*Match, error) {
 	return nil, errs.MatchNotFound
 }
 
-func (m *Manager) GetMatchStatus(tchID string) (*Status, error) {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) GetMatchStatus(tchID string) (*Status, error) {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return nil, err
 	}
 	return &mt.status, nil
 }
 
-func (m *Manager) SetRecommendedChannel(tchID string, vch *dg.Channel) error {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) SetRecommendedChannel(tchID string, vch *dg.Channel) error {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
@@ -216,8 +216,8 @@ func (m *Manager) SetRecommendedChannel(tchID string, vch *dg.Channel) error {
 	return nil
 }
 
-func (m *Manager) SetListeningMessage(tchID string, msg *dg.Message) error {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) SetListeningMessage(tchID string, msg *dg.Message) error {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
@@ -225,8 +225,8 @@ func (m *Manager) SetListeningMessage(tchID string, msg *dg.Message) error {
 	return nil
 }
 
-func (m *Manager) IsListeningMessage(tchID, msgID string) bool {
-	mt, err := m.GetMatchByTChID(tchID)
+func (mn *Manager) IsListeningMessage(tchID, msgID string) bool {
+	mt, err := mn.GetMatchByTChID(tchID)
 	if err != nil {
 		return false
 	}
@@ -237,9 +237,9 @@ func (m *Manager) IsListeningMessage(tchID, msgID string) bool {
 }
 
 // use cache if we need more performance(not map)
-func (m *Manager) getUsingTCh(lock bool) []*dg.Channel {
+func (mn *Manager) getUsingTCh(lock bool) []*dg.Channel {
 	using := []*dg.Channel{}
-	for _, m := range m.list {
+	for _, m := range mn.list {
 		if m.tch != nil {
 			using = append(using, m.tch)
 		}
@@ -247,9 +247,9 @@ func (m *Manager) getUsingTCh(lock bool) []*dg.Channel {
 	return using
 }
 
-func (m *Manager) getUsingVCh(lock bool) []*dg.Channel {
+func (mn *Manager) getUsingVCh(lock bool) []*dg.Channel {
 	using := []*dg.Channel{}
-	for _, m := range m.list {
+	for _, m := range mn.list {
 		if m.Team1VCh != nil {
 			using = append(using, m.Team1VCh)
 		}
