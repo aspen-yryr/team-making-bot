@@ -58,6 +58,7 @@ Team B(%s): %v
 go：ボイスチャンネルを移動
 shuffle：チーム分けやり直し`
 const conflictVCh = `%sは使用できません。`
+const ownerNotInVchs = `startコマンドを入力した人がvcに参加している必要があります。`
 
 type Messages struct {
 	Help,
@@ -73,7 +74,8 @@ type Messages struct {
 	MakeTeam,
 	ConfirmTeam,
 	ConflictVCh,
-	NoVChAvailable *Message
+	NoVChAvailable,
+	OwnerNotInVchs *Message
 }
 
 func NewMessages() *Messages {
@@ -92,6 +94,7 @@ func NewMessages() *Messages {
 		ConfirmTeam:              newMessage(confirmTeam),
 		ConflictVCh:              newMessage(conflictVCh),
 		NoVChAvailable:           newMessage(noVChAvailable),
+		OwnerNotInVchs:           newMessage(ownerNotInVchs),
 	}
 	return ms
 }

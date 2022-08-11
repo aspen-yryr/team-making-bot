@@ -302,6 +302,15 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.NoVChAvailable.Format(),
 		)
+		b.mts.RemoveMatch(tch.ID)
+		return
+	} else if errors.Is(err, errs.OwnerNotInVchs) {
+		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.OwnerNotInVchs.Format(),
+		)
+		b.mts.RemoveMatch(tch.ID)
 		return
 	} else if err != nil {
 		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
@@ -309,6 +318,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
+		b.mts.RemoveMatch(tch.ID)
 		return
 	}
 	glog.V(debug).Infof("Channel \"%s\": Match started", ds.ChannelUnsafe(m.ChannelID))
@@ -479,7 +489,7 @@ func (b *Bot) recommendChannel(tchID, userID string) error {
 		return err
 	}
 
-	var vch *dg.Channel
+	var vch *dg.Channel = nil
 	for _, vs := range g.VoiceStates {
 		if vs.UserID == userID {
 			vch, err = ds.Channel(vs.ChannelID)
@@ -488,7 +498,9 @@ func (b *Bot) recommendChannel(tchID, userID string) error {
 		}
 		}
 	}
-
+	if vch == nil {
+		return errs.OwnerNotInVchs
+	}
 	// if len(g.VoiceStates) > 0 {
 	// 	vch, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
 	// 	if err != nil {
