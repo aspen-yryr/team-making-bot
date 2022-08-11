@@ -42,7 +42,7 @@ end：チーム分けの終了
 reset：すべての設定をリセット
 help：このヘルプの表示`
 const exit = `このチャンネルでのチーム分けを終了します。`
-const unknownError = "エラーが発生しました。"
+const unknownError = `エラーが発生しました。`
 const matchAlreadyStarted = `このテキストチャンネルではすでにチーム分けが開始しています。`
 const askTeam1VCh = `チームAが使用するボイスチャンネルは？`
 const askTeam1VChWithRecommend = `チームAが使用するボイスチャンネルは%sでいいですか？`

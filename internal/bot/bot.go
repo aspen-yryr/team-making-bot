@@ -264,7 +264,7 @@ func (b *Bot) onEnable(g *dg.Guild) {
 		}
 		glog.V(info).Infof("Guild \"%s\": Send hello to \"%s\" channel", g.Name, tchs[0].Name)
 	} else {
-		glog.V(info).Infof("Guild \"%s\": Bot activate in  \"%s\" channel", g.Name, tchs[0].Name)
+		glog.V(info).Infof("Guild \"%s\": Bot activate", g.Name)
 	}
 }
 
@@ -493,9 +493,9 @@ func (b *Bot) recommendChannel(tchID, userID string) error {
 	for _, vs := range g.VoiceStates {
 		if vs.UserID == userID {
 			vch, err = ds.Channel(vs.ChannelID)
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if vch == nil {
