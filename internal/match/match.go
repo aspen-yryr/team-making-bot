@@ -163,11 +163,9 @@ func (m *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 			players = append(players, &tm.Player{DiscordId: p.UserID})
 		}
 	}
-	rtm, err := tm.NewRandomTeamMaker()
-	if err != nil {
-		return err
-	}
-	mt.team1, mt.team2 = rtm.MakeTeam(players)
+	rtm := tm.NewRandomTeamMaker()
+	teams := rtm.MakeTeam(players)
+	mt.team1, mt.team2 = teams[0], teams[1]
 	return nil
 }
 

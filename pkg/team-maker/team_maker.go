@@ -1,8 +1,7 @@
-package teammaker
+package team_maker
 
 import (
-	"math/rand"
-	"time"
+	"math"
 )
 
 type Player struct {
@@ -10,23 +9,51 @@ type Player struct {
 	GameId    string
 }
 
-type TeamMaker interface {
-	MakeTeam(players []Player) (teamA []Player, teamB []Player)
+type Scoring interface {
+	GetScore(player *Player) (score float64)
 }
 
-type randomTeamMaker struct {
-	// seed int
+type BaseTeamMaker struct {
+	GetScore func(player *Player) (score float64)
 }
 
-func (tm *randomTeamMaker) MakeTeam(players []*Player) ([]*Player, []*Player) {
-	l := int(len(players) / 2)
-	rand.Seed(int64(time.Now().UnixNano()))
-	rand.Shuffle(len(players), func(i, j int) {
-		players[i], players[j] = players[j], players[i]
-	})
-	return players[:l], players[l:]
+func (tm *BaseTeamMaker) MakeTeam(players []*Player) [][]*Player {
+	// sort players
+	for i := 0; i < len(players); i++ {
+		// for i, _ := range players {
+		for j := i; j < len(players); j++ {
+			if tm.getScore(players[i]) < tm.getScore(players[j]) {
+				temp := players[i]
+				players[i] = players[j]
+				players[j] = temp
+			}
+		}
+	}
+
+	// divide 2team
+	teamA := []*Player{}
+	teamB := []*Player{}
+	scoreA := 0.0
+	scoreB := 0.0
+	for _, p := range players {
+		afterA := scoreA + tm.getScore(p)
+		afterB := scoreB + tm.getScore(p)
+		if math.Abs(afterA-scoreB) > math.Abs(scoreA-afterB) {
+			teamB = append(teamB, p)
+			scoreB += tm.getScore(p)
+		} else {
+			teamA = append(teamA, p)
+			scoreA += tm.getScore(p)
+		}
+	}
+	return [][]*Player{teamA, teamB}
 }
 
-func NewRandomTeamMaker() (*randomTeamMaker, error) {
-	return &randomTeamMaker{}, nil
+//TODO: cache
+func (tm *BaseTeamMaker) getScore(p *Player) (score float64) {
+	return tm.GetScore(p)
+}
+
+func NewTeamMaker(s Scoring) *BaseTeamMaker {
+	return &BaseTeamMaker{GetScore: s.GetScore}
 }
