@@ -42,7 +42,7 @@ end：チーム分けの終了
 reset：すべての設定をリセット
 help：このヘルプの表示`
 const exit = `このチャンネルでのチーム分けを終了します。`
-const unknownError = "エラーが発生しました。"
+const unknownError = `エラーが発生しました。`
 const matchAlreadyStarted = `このテキストチャンネルではすでにチーム分けが開始しています。`
 const askTeam1VCh = `チームAが使用するボイスチャンネルは？`
 const askTeam1VChWithRecommend = `チームAが使用するボイスチャンネルは%sでいいですか？`
@@ -58,6 +58,8 @@ Team B(%s): %v
 go：ボイスチャンネルを移動
 shuffle：チーム分けやり直し`
 const conflictVCh = `%sは使用できません。`
+const ownerNotInVchs = `startコマンドを入力した人がvcに参加している必要があります。
+vcに参加してからやり直してください。`
 
 type Messages struct {
 	Help,
@@ -73,7 +75,8 @@ type Messages struct {
 	MakeTeam,
 	ConfirmTeam,
 	ConflictVCh,
-	NoVChAvailable *Message
+	NoVChAvailable,
+	OwnerNotInVchs *Message
 }
 
 func NewMessages() *Messages {
@@ -92,6 +95,7 @@ func NewMessages() *Messages {
 		ConfirmTeam:              newMessage(confirmTeam),
 		ConflictVCh:              newMessage(conflictVCh),
 		NoVChAvailable:           newMessage(noVChAvailable),
+		OwnerNotInVchs:           newMessage(ownerNotInVchs),
 	}
 	return ms
 }
