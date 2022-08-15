@@ -58,7 +58,8 @@ Team B(%s): %v
 go：ボイスチャンネルを移動
 shuffle：チーム分けやり直し`
 const conflictVCh = `%sは使用できません。`
-const ownerNotInVchs = `startコマンドを入力した人がvcに参加している必要があります。`
+const ownerNotInVchs = `startコマンドを入力した人がvcに参加している必要があります。
+vcに参加してからやり直してください。`
 
 type Messages struct {
 	Help,

@@ -22,7 +22,7 @@ const (
 
 type Match struct {
 	// TODO: dg.channel getter for nil check
-	owner              *dg.User
+	Owner              *dg.User
 	tch                *dg.Channel
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
@@ -80,7 +80,7 @@ func (mn *Manager) CreateMatch(tch *dg.Channel, user *dg.User) (*Match, error) {
 	}
 
 	mt := &Match{
-		owner:  user,
+		Owner:  user,
 		tch:    tch,
 		status: StateVCh1Setting,
 	}

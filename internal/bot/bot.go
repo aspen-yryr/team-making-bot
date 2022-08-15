@@ -295,20 +295,47 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		return
 	}
 
-	err = b.recommendChannel(m.ChannelID, m.Author.ID)
-	if errors.Is(err, errs.NoAvailableVCh) {
-		glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+	chs, err := ds.GuildChannels(tch.GuildID)
+	if err != nil {
+		glog.Errorf("Channel \"%s\": Cannot handle start command because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		b.mts.RemoveMatch(tch.ID)
+		return
+	}
+	availableVChs := b.mts.FilterAvailableVCh(chs)
+	if len(availableVChs) == 0 {
+		glog.Warningf("Channel \"%s\": No voice channel available", ds.ChannelUnsafe(m.ChannelID))
 		ds.ChannelMessageSend(
 			m.ChannelID,
 			msgs.NoVChAvailable.Format(),
 		)
 		b.mts.RemoveMatch(tch.ID)
 		return
-	} else if errors.Is(err, errs.OwnerNotInVchs) {
-		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+	}
+
+	vch, err := b.getOwnerVch(m.ChannelID)
+	if errors.Is(err, errs.OwnerNotInVchs) {
+		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
 		ds.ChannelMessageSend(
 			m.ChannelID,
 			msgs.OwnerNotInVchs.Format(),
+		)
+		b.mts.RemoveMatch(tch.ID)
+		return
+	} else if err != nil {
+		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.UnknownError.Format(),
+		)
+		b.mts.RemoveMatch(tch.ID)
+	}
+
+	err = b.recommendChannel(m.ChannelID, vch.ID)
+	if errors.Is(err, errs.NoAvailableVCh) {
+		glog.Warningf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.NoVChAvailable.Format(),
 		)
 		b.mts.RemoveMatch(tch.ID)
 		return
@@ -465,56 +492,42 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 	ds.ChannelMessageSend(tchID, "？")
 }
 
-func (b *Bot) recommendChannel(tchID, userID string) error {
-	glog.V(trace).Infoln("recommendChannel called")
+func (b *Bot) getOwnerVch(tchID string) (*dg.Channel, error) {
+	glog.V(trace).Infoln("getOwnerVch called")
+	mt, err := b.mts.GetMatchByTChID(tchID)
+	if err != nil {
+		return nil, err
+	}
 
 	tch, err := ds.Channel(tchID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	chs, err := ds.GuildChannels(tch.GuildID)
-	if err != nil {
-		return err
-	}
-
-	availableVChs := b.mts.FilterAvailableVCh(chs)
-
-	glog.V(trace).Infof("availableVChs: %+v", availableVChs)
-	if len(availableVChs) == 0 {
-		return errs.NoAvailableVCh
-	}
-
 	g, err := ds.State.Guild(tch.GuildID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var vch *dg.Channel = nil
 	for _, vs := range g.VoiceStates {
-		if vs.UserID == userID {
+		if vs.UserID == mt.Owner.ID {
 			vch, err = ds.Channel(vs.ChannelID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 	if vch == nil {
-		return errs.OwnerNotInVchs
+		return nil, errs.OwnerNotInVchs
 	}
-	// if len(g.VoiceStates) > 0 {
-	// 	vch, err = ds.GetMostPeopleVCh(availableVChs, g.VoiceStates)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if vch == nil {
-	// 		vch = availableVChs[0]
-	// 	}
-	// } else {
-	// 	glog.Warningf("Guild %s: No voice states", g.Name)
-	// 	vch = availableVChs[0]
-	// }
 
-	err = b.mts.SetRecommendedChannel(tchID, vch)
+	return vch, nil
+}
+
+func (b *Bot) recommendChannel(tchID, vchID string) error {
+	glog.V(trace).Infoln("recommendChannel called")
+
+	vch, err := ds.Channel(vchID)
 	if err != nil {
 		return err
 	}
@@ -523,6 +536,11 @@ func (b *Bot) recommendChannel(tchID, userID string) error {
 		tchID,
 		msgs.AskTeam1VChWithRecommend.Format(vch.Name),
 	)
+	if err != nil {
+		return err
+	}
+
+	err = b.mts.SetRecommendedChannel(tchID, vch)
 	if err != nil {
 		return err
 	}
@@ -537,8 +555,11 @@ func (b *Bot) recommendChannel(tchID, userID string) error {
 	}
 	err = b.mts.SetListeningMessage(tchID, msg)
 	if err != nil {
-		glog.Errorf("Channel %s: Can't set listening message: %v", tch.Name, err)
-		ds.ChannelMessageSend(tch.ID, msgs.UnknownError.Format())
+		glog.Errorf("Channel %s: Can't set listening message: %v", ds.ChannelUnsafe(tchID), err)
+		ds.ChannelMessageSend(
+			tchID,
+			msgs.UnknownError.Format(),
+		)
 		return err
 	}
 
