@@ -297,7 +297,11 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 
 	chs, err := ds.GuildChannels(tch.GuildID)
 	if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot handle start command because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		glog.Errorf("Channel \"%s\": Cannot get guild channels because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.UnknownError.Format(),
+		)
 		b.mts.RemoveMatch(tch.ID)
 		return
 	}
