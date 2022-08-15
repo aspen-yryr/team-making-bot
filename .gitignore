@@ -20,3 +20,4 @@ app
 !.env.dev.example
 others/
 .devcontainer
+.history/
