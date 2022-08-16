@@ -5,21 +5,21 @@ import (
 )
 
 type randomTeamMaker struct {
-	BaseTeamMaker
-	// seed int
+	*BaseTeamMaker
 }
 
-func (tm *randomTeamMaker) GetScore(player *Player) (score float64) {
+type randomScorer struct {
+}
+
+func (tm randomScorer) GetScore(id string) (score float64) {
 	return rand.Float64()
 }
-
-func NewRandomTeamMaker() *randomTeamMaker {
-	tm := &randomTeamMaker{}
-	tm.BaseTeamMaker = *NewTeamMaker(tm)
-	return tm
+func (tm randomTeamMaker) SampleInput(tmp string) {
+	println(tmp)
 }
 
-// func NewRandomTeamMaker() (*TeamMaker) {
-
-// 	return &NewTeamMaker(tm.), nil
-// }
+func NewRandomTeamMaker(discordIDs []string) *randomTeamMaker {
+	return &randomTeamMaker{
+		NewTeamMaker(discordIDs, randomScorer{}),
+	}
+}
