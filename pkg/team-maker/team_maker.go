@@ -2,8 +2,13 @@ package team_maker
 
 import "math"
 
+type player struct {
+	id    string
+	score float64
+}
+
 type Scorer interface {
-	GetScore(id string) float64
+	GetScore(id string) (float64, error)
 }
 
 type TeamMaker interface {
@@ -15,15 +20,27 @@ type BaseTeamMaker struct {
 	Scorer
 }
 
-func (tm BaseTeamMaker) MakeTeam() [][]string {
+func (tm BaseTeamMaker) MakeTeam() ([][]string, error) {
+	players := []*player{}
+	for _, id := range tm.DiscordIds {
+		score, err := tm.GetScore(id)
+		if err != nil {
+			return nil, err
+		}
+
+		players = append(players, &player{
+			id:    id,
+			score: score,
+		})
+	}
+
 	// sort players
-	for i := 0; i < len(tm.DiscordIds); i++ {
-		// for i, _ := range tm.DiscordIds {
-		for j := i; j < len(tm.DiscordIds); j++ {
-			if tm.getScore(tm.DiscordIds[i]) < tm.getScore(tm.DiscordIds[j]) {
-				temp := tm.DiscordIds[i]
-				tm.DiscordIds[i] = tm.DiscordIds[j]
-				tm.DiscordIds[j] = temp
+	for i := 0; i < len(players); i++ {
+		for j := i; j < len(players); j++ {
+			if players[i].score < players[j].score {
+				temp := players[i]
+				players[i] = players[j]
+				players[j] = temp
 			}
 		}
 	}
@@ -33,23 +50,18 @@ func (tm BaseTeamMaker) MakeTeam() [][]string {
 	teamB := []string{}
 	scoreA := 0.0
 	scoreB := 0.0
-	for _, p := range tm.DiscordIds {
-		afterA := scoreA + tm.getScore(p)
-		afterB := scoreB + tm.getScore(p)
+	for _, p := range players {
+		afterA := scoreA + p.score
+		afterB := scoreB + p.score
 		if math.Abs(afterA-scoreB) > math.Abs(scoreA-afterB) {
-			teamB = append(teamB, p)
-			scoreB += tm.getScore(p)
+			teamB = append(teamB, p.id)
+			scoreB += p.score
 		} else {
-			teamA = append(teamA, p)
-			scoreA += tm.getScore(p)
+			teamA = append(teamA, p.id)
+			scoreA += p.score
 		}
 	}
-	return [][]string{teamA, teamB}
-}
-
-//TODO: cache
-func (tm BaseTeamMaker) getScore(id string) (score float64) {
-	return tm.GetScore(id)
+	return [][]string{teamA, teamB}, nil
 }
 
 func NewTeamMaker(discordIDs []string, s Scorer) *BaseTeamMaker {

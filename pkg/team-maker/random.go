@@ -11,11 +11,8 @@ type randomTeamMaker struct {
 type randomScorer struct {
 }
 
-func (tm randomScorer) GetScore(id string) (score float64) {
-	return rand.Float64()
-}
-func (tm randomTeamMaker) SampleInput(tmp string) {
-	println(tmp)
+func (tm randomScorer) GetScore(id string) (float64, error) {
+	return rand.Float64(), nil
 }
 
 func NewRandomTeamMaker(discordIDs []string) *randomTeamMaker {

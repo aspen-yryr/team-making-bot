@@ -155,7 +155,10 @@ func (mn *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 		}
 	}
 	rtm := tm.NewRandomTeamMaker(players)
-	teams := rtm.MakeTeam()
+	teams, err := rtm.MakeTeam()
+	if err != nil {
+		return err
+	}
 	mt.team1, mt.team2 = teams[0], teams[1]
 	return nil
 }
