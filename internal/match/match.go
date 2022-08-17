@@ -26,8 +26,8 @@ type Match struct {
 	tch                *dg.Channel
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
-	team1              []*tm.Player
-	team2              []*tm.Player
+	team1              []string
+	team2              []string
 	recommendedChannel *dg.Channel
 	listeningMessage   *dg.Message
 	status             Status
@@ -40,17 +40,6 @@ func (m *Match) GetRecommendedChannel() (*dg.Channel, error) {
 		return nil, errs.Unknown
 	}
 	return m.recommendedChannel, nil
-}
-
-func (m *Match) GetShuffledIds() ([]string, []string) {
-	f := func(ps []*tm.Player) []string {
-		r := []string{}
-		for _, p := range ps {
-			r = append(r, p.DiscordId)
-		}
-		return r
-	}
-	return f(m.team1), f(m.team2)
 }
 
 func (m *Match) GetGuildId() string {
@@ -156,20 +145,21 @@ func (mn *Manager) ShuffleTeam(tchID string, vss []*dg.VoiceState) error {
 	var chWithVss []*discord.ChWithVss
 	chWithVss, _ = du.PackChannelsAndVoiceStates([]*dg.Channel{mt.Team1VCh, mt.Team2VCh}, vss)
 
-	players := []*tm.Player{}
+	players := []string{}
 	for _, cv := range chWithVss {
 		for _, p := range cv.Vss {
 			if err != nil {
 				return err
 			}
-			players = append(players, &tm.Player{DiscordId: p.UserID})
+			players = append(players, p.UserID)
 		}
 	}
-	rtm, err := tm.NewRandomTeamMaker()
+	rtm := tm.NewRandomTeamMaker(players)
+	teams, err := rtm.MakeTeam()
 	if err != nil {
 		return err
 	}
-	mt.team1, mt.team2 = rtm.MakeTeam(players)
+	mt.team1, mt.team2 = teams[0], teams[1]
 	return nil
 }
 
@@ -178,15 +168,7 @@ func (mn *Manager) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []
 	if err != nil {
 		return nil, nil
 	}
-
-	f := func(ps []*tm.Player) []string {
-		r := []string{}
-		for _, p := range ps {
-			r = append(r, p.DiscordId)
-		}
-		return r
-	}
-	return f(mt.team1), f(mt.team2)
+	return mt.team1, mt.team2
 }
 
 // use cache if we need more performance (not map)
