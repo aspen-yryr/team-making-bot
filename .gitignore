@@ -21,3 +21,4 @@ app
 others/
 .devcontainer
 .history/
+postgres/
