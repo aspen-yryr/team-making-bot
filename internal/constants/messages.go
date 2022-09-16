@@ -6,9 +6,9 @@ import (
 
 var Msgs *Messages
 
-func init() {
-	Msgs = NewMessages()
-}
+// func init() {
+// 	Msgs = NewMessages()
+// }
 
 type Message struct {
 	format *string

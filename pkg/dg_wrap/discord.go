@@ -1,15 +1,41 @@
-package discord
+package dg_wrap
 
 import (
 	"fmt"
 
+	"github.com/aspen-yryr/team-making-bot/internal/configs"
+
 	dg "github.com/bwmarrin/discordgo"
 )
 
-type Session struct {
+type DiscordSvc struct {
 	*dg.Session
 	*Utility
 }
+
+//controller and presenter
+type Session struct {
+	dg.Session
+}
+
+type Ready dg.Ready
+
+type Message dg.Message
+
+type MessageCreate dg.MessageCreate
+
+type MessageReactionAdd dg.MessageReactionAdd
+
+type Guild dg.Guild
+
+type User dg.User
+
+type UserID string
+
+type Channel dg.Channel
+
+const ChannelTypeGuildVoice = dg.ChannelTypeGuildVoice
+const ChannelTypeGuildText = dg.ChannelTypeGuildText
 
 type ChWithVss struct {
 	Ch  *dg.Channel
@@ -19,11 +45,19 @@ type ChWithVss struct {
 type Utility struct {
 }
 
-func New(s *dg.Session) *Session {
-	return &Session{s, &Utility{}}
+func NewDiscordSvc(s *dg.Session) *DiscordSvc {
+	return &DiscordSvc{s, &Utility{}}
 }
 
-func (s *Session) ChannelUnsafe(chID string) string {
+func NewSession(c *configs.DiscordConfig) (*dg.Session, error) {
+	sess, err := dg.New(c.APIKey)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+func (s *DiscordSvc) ChannelUnsafe(chID string) string {
 	ch, err := s.Channel(chID)
 	if err != nil {
 		return ""
@@ -60,7 +94,7 @@ func (u *Utility) FilterChannelsByType(
 	return filtered
 }
 
-func (s *Session) IsMentionedMessage(m *dg.MessageCreate) bool {
+func (s *DiscordSvc) IsMentionedMessage(m *dg.MessageCreate) bool {
 	for _, user := range m.Mentions {
 		if user.ID == s.State.User.ID {
 			return true
@@ -92,7 +126,7 @@ func (u *Utility) PackChannelsAndVoiceStates(vchs []*dg.Channel, vss []*dg.Voice
 	return pk, nil
 }
 
-func (s Session) GetSameGuildChannels(chID string) ([]*dg.Channel, error) {
+func (s DiscordSvc) GetSameGuildChannels(chID string) ([]*dg.Channel, error) {
 	ch, err := s.Channel(chID)
 	if err != nil {
 		return nil, fmt.Errorf("can't get channel: %v", err)
@@ -119,4 +153,18 @@ func (u *Utility) GetMostPeopleVCh(vchs []*dg.Channel, vss []*dg.VoiceState) (*d
 		}
 	}
 	return max.ch, nil
+}
+
+//TODO: fix
+func (u *Utility) GetUsingVCh(b bool) []*dg.Channel {
+	return []*dg.Channel{}
+}
+
+func isContain(s string, list []string) bool {
+	for _, l := range list {
+		if s == l {
+			return true
+		}
+	}
+	return false
 }

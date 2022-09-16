@@ -10,6 +10,11 @@ import (
 	"github.com/aspen-yryr/team-making-bot/service/match/user"
 )
 
+type MatchRepository interface {
+	Create() (*Match, error)
+	Get(mt *Match) (*Match, error)
+}
+
 func toPbUsers(users []*user.User) []*matchpb.User {
 	ret := []*matchpb.User{}
 	for _, u := range users {
@@ -83,6 +88,7 @@ type MatchService struct {
 }
 
 func NewMatchService() matchpb.MatchSvcServer {
+	// TODO: grpc client
 	return &MatchService{
 		matches:      []*Match{},
 		users:        []*user.User{},

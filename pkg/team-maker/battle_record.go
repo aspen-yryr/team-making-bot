@@ -26,7 +26,7 @@ type BattleRecordRepository interface {
 	Save(*BattleRecord) error
 }
 
-type battleRecordTeamMaker struct {
+type BattleRecordTeamMaker struct {
 	*BaseTeamMaker
 	repo BattleRecordRepository
 }
@@ -55,13 +55,17 @@ func (sc battleRecordScorer) GetScore(id string) (float64, error) {
 	return float64(won / len(ps)), nil
 }
 
-func (tm *battleRecordTeamMaker) RegisterBattleResult(result *BattleResult) error {
+func (tm *BattleRecordTeamMaker) SetPlayers(players []string) {
+	tm.DiscordIds = players
+}
+
+func (tm *BattleRecordTeamMaker) RegisterBattleResult(result *BattleResult) error {
 	return tm.repo.Save(&BattleRecord{BattleResult: *result, BattleDateTime: time.Now()})
 }
 
-func NewBattleRecordTeamMaker(discordIDs []string, repo BattleRecordRepository) *battleRecordTeamMaker {
-	return &battleRecordTeamMaker{
-		NewTeamMaker(discordIDs, battleRecordScorer{repo}),
+func NewBattleRecordTeamMaker(repo BattleRecordRepository) *BattleRecordTeamMaker {
+	return &BattleRecordTeamMaker{
+		NewTeamMaker(nil, battleRecordScorer{repo}),
 		repo,
 	}
 }

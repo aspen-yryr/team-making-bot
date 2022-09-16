@@ -6,9 +6,9 @@ import (
 
 var Errs *Errors
 
-func init() {
-	Errs = NewErrors()
-}
+// func init() {
+// 	Errs = NewErrors()
+// }
 
 type Errors struct {
 	Unknown,

@@ -19,6 +19,6 @@ func (s SampleMigrator) Run() error {
 	return nil
 }
 
-func NewSampleMigrator(db *gorm.DB) *SampleMigrator {
+func NewSampleMigrator(db *gorm.DB) Migrator {
 	return &SampleMigrator{db}
 }

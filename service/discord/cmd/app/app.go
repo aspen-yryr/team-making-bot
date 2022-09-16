@@ -4,8 +4,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/aspen-yryr/team-making-bot/service/discord/bot"
-
 	"github.com/golang/glog"
 	"github.com/joho/godotenv"
 )
@@ -27,6 +25,9 @@ func main() {
 		glog.Error("Cannot get bot Key")
 		return
 	}
-	b := bot.New(apiKey, *greet)
+	b, err := InitBot(*greet)
+	if err != nil {
+		panic("cannot init Bot")
+	}
 	b.Run()
 }

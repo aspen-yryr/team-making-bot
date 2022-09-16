@@ -6,16 +6,15 @@ import (
 	"sync"
 
 	"github.com/aspen-yryr/team-making-bot/internal/constants"
-	"github.com/aspen-yryr/team-making-bot/pkg/discord"
+	"github.com/aspen-yryr/team-making-bot/pkg/dg_wrap"
 	matchpb "github.com/aspen-yryr/team-making-bot/proto/match"
+	dg "github.com/bwmarrin/discordgo"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	dg "github.com/bwmarrin/discordgo"
 )
 
-var du *discord.Utility
+var du *dg_wrap.Utility
 var errs = constants.Errs
 
 type Status int
