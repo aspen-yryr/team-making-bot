@@ -1,47 +1,46 @@
 package match
 
 import (
-	"team-making-bot/internal/match/player"
+	"team-making-bot/internal/match/user"
 	tm "team-making-bot/pkg/team-maker"
 )
 
-type match struct {
-	Owner *player.Player
-	Team1 []*player.Player
-	Team2 []*player.Player
+type Match struct {
+	Owner   *user.User
+	Team1   []*user.User
+	Team2   []*user.User
+	Players []*user.User
 }
 
-func NewMatch(owner *player.Player) *match {
-	return &match{
-		Owner: owner,
-		Team1: []*player.Player{},
-		Team2: []*player.Player{},
+func NewMatch(owner *user.User) *Match {
+	return &Match{
+		Owner:   owner,
+		Team1:   []*user.User{},
+		Team2:   []*user.User{},
+		Players: []*user.User{},
 	}
 }
 
-func (m *match) Ids() []string {
-	var ids []string
-	for _, p := range append(m.Team1, m.Team2...) {
-		ids = append(ids, p.ID)
+func (m *Match) AppendMember(player *user.User) {
+	for _, p := range m.Players {
+		if player.Is(p) {
+			return
+		}
 	}
-	return ids
-}
-
-func (m *match) AppendMember(id string) {
-	panic("Append Member not implemented")
+	m.Players = append(m.Players, player)
 }
 
 type MatchService struct {
-	list []*match
+	list []*Match
 }
 
 func NewMatchService() *MatchService {
 	return &MatchService{
-		list: []*match{},
+		list: []*Match{},
 	}
 }
 
-func (m *MatchService) Find(owner *player.Player) (*match, error) {
+func (m *MatchService) Find(owner *user.User) (*Match, error) {
 	for _, mt := range m.list {
 		if mt.Owner.Is(owner) {
 			return mt, nil
@@ -50,7 +49,7 @@ func (m *MatchService) Find(owner *player.Player) (*match, error) {
 	return nil, errs.MatchNotFound
 }
 
-func (m *MatchService) Create(owner *player.Player) (*match, error) {
+func (m *MatchService) Create(owner *user.User) (*Match, error) {
 	_, err := m.Find(owner)
 	if err != errs.MatchNotFound && err != nil {
 		return nil, err
@@ -61,7 +60,7 @@ func (m *MatchService) Create(owner *player.Player) (*match, error) {
 	return mt, nil
 }
 
-func (m *MatchService) Remove(owner *player.Player) error {
+func (m *MatchService) Remove(owner *user.User) error {
 	for i, mt := range m.list {
 		if mt.Owner.Is(owner) {
 			m.list[i] = m.list[len(m.list)-1]
@@ -73,24 +72,21 @@ func (m *MatchService) Remove(owner *player.Player) error {
 	return errs.MatchNotFound
 }
 
-func (m *MatchService) Shuffle(owner *player.Player) error {
+func (m *MatchService) Shuffle(owner *user.User) error {
 	mt, err := m.Find(owner)
 	if err != nil {
 		return err
 	}
 
-	Ids := mt.Ids()
-	players := append(mt.Team1, mt.Team2...)
-
-	rtm := tm.NewRandomTeamMaker(Ids)
+	rtm := tm.NewRandomTeamMaker(user.Ids(mt.Players))
 	teams, err := rtm.MakeTeam()
 	if err != nil {
 		return err
 	}
 
-	mt.Team1 = []*player.Player{}
-	mt.Team2 = []*player.Player{}
-	for _, p := range players {
+	mt.Team1 = []*user.User{}
+	mt.Team2 = []*user.User{}
+	for _, p := range mt.Players {
 		for _, t1 := range teams[0] {
 			if p.ID == t1 {
 				mt.Team1 = append(mt.Team1, p)

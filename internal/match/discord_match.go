@@ -3,7 +3,7 @@ package match
 import (
 	"sync"
 	"team-making-bot/internal/constants"
-	"team-making-bot/internal/match/player"
+	"team-making-bot/internal/match/user"
 	"team-making-bot/pkg/discord"
 
 	dg "github.com/bwmarrin/discordgo"
@@ -26,7 +26,7 @@ type DiscordMatch struct {
 	tch                *dg.Channel
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
-	Match              *match
+	Match              *Match
 	recommendedChannel *dg.Channel
 	listeningMessage   *dg.Message
 	status             Status
@@ -60,7 +60,7 @@ func NewDiscordMatchService() *DiscordMatchService {
 	}
 }
 
-func (r *DiscordMatchService) Create(tch *dg.Channel, user *dg.User) (*DiscordMatch, error) {
+func (r *DiscordMatchService) Create(tch *dg.Channel, owner *dg.User) (*DiscordMatch, error) {
 	r.tchMutex.Lock()
 	defer r.tchMutex.Unlock()
 
@@ -68,16 +68,16 @@ func (r *DiscordMatchService) Create(tch *dg.Channel, user *dg.User) (*DiscordMa
 		return nil, errs.MatchAlreadyStarted
 	}
 
-	mt, err := r.svc.Create(&player.Player{
-		ID:   user.ID,
-		Name: user.Username,
+	mt, err := r.svc.Create(&user.User{
+		ID:   owner.ID,
+		Name: owner.Username,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	dmt := &DiscordMatch{
-		Owner:  user,
+		Owner:  owner,
 		tch:    tch,
 		status: StateVCh1Setting,
 		Match:  mt,
@@ -151,14 +151,11 @@ func (r *DiscordMatchService) Shuffle(tchID string, vss []*dg.VoiceState) error 
 		return err
 	}
 
-	mt.Match.Team1 = []*player.Player{}
-	mt.Match.Team2 = []*player.Player{}
 	for _, p := range vss {
 		if err != nil {
 			return err
 		}
-		// TODO: use match.AppendMember function
-		mt.Match.Team1 = append(mt.Match.Team1, &player.Player{
+		mt.Match.AppendMember(&user.User{
 			ID:   p.UserID,
 			Name: "",
 		})
@@ -172,7 +169,7 @@ func (r *DiscordMatchService) GetTeam(tchID string) (Team1UserIDs []string, Team
 		return nil, nil
 	}
 
-	f := func(ps []*player.Player) []string {
+	f := func(ps []*user.User) []string {
 		r := []string{}
 		for _, p := range ps {
 			r = append(r, p.ID)
