@@ -41,14 +41,14 @@ var Stamp = map[string]string{
 
 type Bot struct {
 	apiKey string
-	mts    *match.Manager
+	mts    *match.DiscordMatchService
 	greet  bool
 }
 
 func New(apiKey string, greet bool) *Bot {
 	return &Bot{
 		apiKey: apiKey,
-		mts:    match.NewMatches(),
+		mts:    match.NewDiscordMatchService(),
 		greet:  greet,
 	}
 }
@@ -278,7 +278,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		)
 		return
 	}
-	_, err = b.mts.CreateMatch(tch, m.Author)
+	_, err = b.mts.Create(tch, m.Author)
 	if errors.Is(err, errs.MatchAlreadyStarted) {
 		glog.Warningf("Channel \"%s\": Match already started", ds.ChannelUnsafe(m.ChannelID))
 		ds.ChannelMessageSend(
@@ -302,7 +302,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 		return
 	}
 	availableVChs := b.mts.FilterAvailableVCh(chs)
@@ -312,7 +312,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.NoVChAvailable.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 		return
 	}
 
@@ -323,7 +323,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.OwnerNotInVchs.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 		return
 	} else if err != nil {
 		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
@@ -331,7 +331,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 	}
 
 	err = b.recommendChannel(m.ChannelID, vch.ID)
@@ -341,7 +341,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.NoVChAvailable.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 		return
 	} else if err != nil {
 		glog.Errorf("Channel \"%s\": Cannot recommend voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
@@ -349,14 +349,14 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
-		b.mts.RemoveMatch(tch.ID)
+		b.mts.Remove(tch.ID)
 		return
 	}
 	glog.V(debug).Infof("Channel \"%s\": Match started", ds.ChannelUnsafe(m.ChannelID))
 }
 
 func (b *Bot) cmdExit(m *dg.MessageCreate) {
-	err := b.mts.RemoveMatch(m.ChannelID)
+	err := b.mts.Remove(m.ChannelID)
 	if errors.Is(err, errs.MatchNotFound) {
 		glog.Warningf("Channel \"%s\": Match not found", ds.ChannelUnsafe(m.ChannelID))
 		return
@@ -397,7 +397,7 @@ func (b *Bot) cmdShuffle(m *dg.MessageCreate) {
 		glog.Errorf("Channel \"%s\": Cannot get guild", ds.ChannelUnsafe(m.ChannelID))
 		return
 	}
-	err = b.mts.ShuffleTeam(m.ChannelID, g.VoiceStates)
+	err = b.mts.Shuffle(m.ChannelID, g.VoiceStates)
 	if err != nil {
 		glog.Errorf("Cannot shuffle team: %v", err)
 		return
@@ -472,7 +472,7 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 					return
 				}
 				if len(g.VoiceStates) > 0 {
-					err = b.mts.ShuffleTeam(tchID, g.VoiceStates)
+					err = b.mts.Shuffle(tchID, g.VoiceStates)
 					if err != nil {
 						glog.Errorf("can't shuffle team: %v", err)
 						return
