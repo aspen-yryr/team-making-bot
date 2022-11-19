@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package user;
+option go_package = "./discordpb";
+
+service Create {
+    // Sends a greeting
+    rpc CreateUser(CreateRequest) returns (CreateResponse) {}
+}
+
+message CreateRequest {
+    string name = 1;
+}
+
+message CreateResponse {
+    User user = 1;
+}
+
+message User {
+    int32 id = 1;
+    string name = 2;
+}

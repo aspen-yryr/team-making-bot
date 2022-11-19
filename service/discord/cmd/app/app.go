@@ -3,12 +3,14 @@ package main
 import (
 	"flag"
 	"os"
-	"team-making-bot/internal/bot"
+
+	"github.com/aspen-yryr/team-making-bot/service/discord/bot"
 
 	"github.com/golang/glog"
 	"github.com/joho/godotenv"
 )
 
+// TODO: relative path
 const defaultEnvFile = "./env/.env"
 
 func main() {

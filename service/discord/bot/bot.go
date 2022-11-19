@@ -6,9 +6,10 @@ import (
 	"os/signal"
 	"regexp"
 	"syscall"
-	"team-making-bot/internal/constants"
-	"team-making-bot/internal/match"
-	"team-making-bot/pkg/discord"
+
+	"github.com/aspen-yryr/team-making-bot/internal/constants"
+	"github.com/aspen-yryr/team-making-bot/pkg/discord"
+	"github.com/aspen-yryr/team-making-bot/service/discord/match"
 
 	dg "github.com/bwmarrin/discordgo"
 	"github.com/golang/glog"
@@ -392,23 +393,9 @@ func (b *Bot) cmdHelp(m *dg.MessageCreate) {
 }
 
 func (b *Bot) cmdShuffle(m *dg.MessageCreate) {
-	g, err := ds.State.Guild(m.GuildID)
-	if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot get guild", ds.ChannelUnsafe(m.ChannelID))
-		return
-	}
-	err = b.mts.Shuffle(m.ChannelID, g.VoiceStates)
+	err := b._shuffle(m.GuildID, m.ChannelID)
 	if err != nil {
 		glog.Errorf("Cannot shuffle team: %v", err)
-		return
-	}
-	err = b.previewTeam(m.ChannelID)
-	if err != nil {
-		glog.Errorf("Cannot preview team: %v", err)
-		ds.ChannelMessageSend(
-			m.ChannelID,
-			msgs.UnknownError.Format(),
-		)
 		return
 	}
 }
@@ -472,7 +459,7 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 					return
 				}
 				if len(g.VoiceStates) > 0 {
-					err = b.mts.Shuffle(tchID, g.VoiceStates)
+					err = b._shuffle(g.ID, tchID)
 					if err != nil {
 						glog.Errorf("can't shuffle team: %v", err)
 						return
@@ -570,13 +557,70 @@ func (b *Bot) recommendChannel(tchID, vchID string) error {
 	return nil
 }
 
+func (b *Bot) _shuffle(gID, tchID string) error {
+	g, err := ds.State.Guild(gID)
+	if err != nil {
+		glog.Errorf("Channel \"%s\": Cannot get guild", ds.ChannelUnsafe(tchID))
+		return err
+	}
+
+	mt, err := b.mts.GetMatchByTChID(tchID)
+	if err != nil {
+		return err
+	}
+
+	var chWithVss []*discord.ChWithVss
+	chWithVss, err = ds.PackChannelsAndVoiceStates([]*dg.Channel{mt.Team1VCh, mt.Team2VCh}, g.VoiceStates)
+	if err != nil {
+		glog.Errorf("Cannot pack voice states: %v", err)
+		return err
+	}
+
+	players := []*dg.User{}
+	for _, cv := range chWithVss {
+		for _, p := range cv.Vss {
+			u, err := ds.User(p.UserID)
+			if err != nil {
+				glog.Errorf("Cannot get discord user: %v", err)
+				return err
+			}
+			players = append(players, u)
+		}
+	}
+
+	err = b.mts.AppendMembers(tchID, players)
+	if err != nil {
+		glog.Errorf("Cannot append members: %v", err)
+		return err
+	}
+
+	err = b.mts.Shuffle(tchID)
+	if err != nil {
+		glog.Errorf("Cannot shuffle team: %v", err)
+		return err
+	}
+	err = b.previewTeam(tchID)
+	if err != nil {
+		glog.Errorf("Cannot preview team: %v", err)
+		ds.ChannelMessageSend(
+			tchID,
+			msgs.UnknownError.Format(),
+		)
+		return err
+	}
+	return nil
+}
+
 func (b *Bot) movePlayers(tchID string) error {
 	mt, err := b.mts.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
 
-	team1, team2 := b.mts.GetTeam(tchID)
+	team1, team2, err := b.mts.GetTeam(tchID)
+	if err != nil {
+		return err
+	}
 
 	for _, p := range team1 {
 		err := ds.GuildMemberMove(mt.GetGuildId(), p, &mt.Team1VCh.ID)
@@ -598,7 +642,10 @@ func (b *Bot) movePlayers(tchID string) error {
 }
 
 func (b *Bot) previewTeam(tchID string) error {
-	ids1, ids2 := b.mts.GetTeam(tchID)
+	ids1, ids2, err := b.mts.GetTeam(tchID)
+	if err != nil {
+		return err
+	}
 	mt, err := b.mts.GetMatchByTChID(tchID)
 	if err != nil {
 		return err

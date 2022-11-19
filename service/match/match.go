@@ -1,9 +1,12 @@
 package match
 
 import (
-	"team-making-bot/internal/match/user"
-	tm "team-making-bot/pkg/team-maker"
+	"github.com/aspen-yryr/team-making-bot/internal/constants"
+	tm "github.com/aspen-yryr/team-making-bot/pkg/team-maker"
+	"github.com/aspen-yryr/team-making-bot/service/match/user"
 )
+
+var errs = constants.Errs
 
 type Match struct {
 	Owner   *user.User

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package match;
+option go_package = "github.com/aspen-yryr/team-making-bot/proto/match";
+
+message User {
+    int32 id = 1;
+    string name = 2;
+}
+
+// service UserSvc {
+//     rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+// }
+
+// message CreateUserRequest {
+//     string name = 1;
+// }
+
+// message CreateUserResponse {
+//     User user = 1;
+// }
