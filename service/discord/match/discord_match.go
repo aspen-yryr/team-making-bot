@@ -68,7 +68,7 @@ func NewDiscordMatchService() *DiscordMatchService {
 	if err != nil {
 		glog.Errorf("did not connect: %v", err)
 	}
-	defer conn.Close()
+	// defer conn.Close()
 
 	return &DiscordMatchService{
 		dcMatches: []*DiscordMatch{},
