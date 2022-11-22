@@ -467,15 +467,6 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 					}
 				}
 
-				err = b.previewTeam(tchID)
-				if err != nil {
-					glog.Errorf("Cannot preview team: %v", err)
-					ds.ChannelMessageSend(
-						tchID,
-						msgs.UnknownError.Format(),
-					)
-					return
-				}
 			}
 			return
 		}
