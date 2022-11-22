@@ -160,7 +160,7 @@ func (m *MatchService) Shuffle(_ context.Context, req *matchpb.ShuffleRequest) (
 	f := func(i []int32) []string {
 		s := []string{}
 		for _, ii := range i {
-			s = append(s, string(ii))
+			s = append(s, strconv.Itoa(int(ii)))
 		}
 		return s
 	}
@@ -194,7 +194,7 @@ func (m *MatchService) Shuffle(_ context.Context, req *matchpb.ShuffleRequest) (
 				mt.Team1.Players = append(mt.Team1.Players, mem)
 			}
 		}
-		tm2, err := f_(teams[0])
+		tm2, err := f_(teams[1])
 		if err != nil {
 			return nil, err
 		}
