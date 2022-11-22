@@ -69,7 +69,6 @@ func (s *Session) IsMentionedMessage(m *dg.MessageCreate) bool {
 	return false
 }
 
-// TODO: add log to reference
 func (u *Utility) PackChannelsAndVoiceStates(vchs []*dg.Channel, vss []*dg.VoiceState) ([]*ChWithVss, error) {
 	pk := []*ChWithVss{}
 	if len(vchs) == 0 {

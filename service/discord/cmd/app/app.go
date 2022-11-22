@@ -10,7 +10,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// TODO: relative path
 const defaultEnvFile = "./env/.env"
 
 func main() {
