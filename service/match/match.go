@@ -144,7 +144,18 @@ func (m *MatchService) AppendMembers(_ context.Context, req *matchpb.AppendMembe
 		return nil, err
 	}
 
+	in := func(id int32, us []*user.User) bool {
+		for _, u := range us {
+			if u.ID == id {
+				return true
+			}
+		}
+		return false
+	}
 	for _, mm := range req.Members {
+		if in(mm.Id, mt.Members) {
+			continue
+		}
 		mt.Members = append(mt.Members, &user.User{ID: mm.Id, Name: mm.Name})
 	}
 	return mt.toPb(), nil

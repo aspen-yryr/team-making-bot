@@ -279,6 +279,24 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		)
 		return
 	}
+
+	// TODO: canCreate method
+	vch, err := b.getOwnerVch(m.ChannelID, m.Author.ID)
+	if errors.Is(err, errs.OwnerNotInVchs) {
+		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.OwnerNotInVchs.Format(),
+		)
+		return
+	} else if err != nil {
+		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
+		ds.ChannelMessageSend(
+			m.ChannelID,
+			msgs.UnknownError.Format(),
+		)
+	}
+
 	_, err = b.mts.Create(tch, m.Author)
 	if errors.Is(err, errs.MatchAlreadyStarted) {
 		glog.Warningf("Channel \"%s\": Match already started", ds.ChannelUnsafe(m.ChannelID))
@@ -293,6 +311,7 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 			m.ChannelID,
 			msgs.UnknownError.Format(),
 		)
+		b.mts.Remove(tch.ID)
 		return
 	}
 
@@ -315,24 +334,6 @@ func (b *Bot) cmdStart(m *dg.MessageCreate) {
 		)
 		b.mts.Remove(tch.ID)
 		return
-	}
-
-	vch, err := b.getOwnerVch(m.ChannelID)
-	if errors.Is(err, errs.OwnerNotInVchs) {
-		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
-		ds.ChannelMessageSend(
-			m.ChannelID,
-			msgs.OwnerNotInVchs.Format(),
-		)
-		b.mts.Remove(tch.ID)
-		return
-	} else if err != nil {
-		glog.Errorf("Channel \"%s\": Cannot get owner voice channel because %s", ds.ChannelUnsafe(m.ChannelID), err)
-		ds.ChannelMessageSend(
-			m.ChannelID,
-			msgs.UnknownError.Format(),
-		)
-		b.mts.Remove(tch.ID)
 	}
 
 	err = b.recommendChannel(m.ChannelID, vch.ID)
@@ -483,13 +484,8 @@ func (b *Bot) handleVChSettingMessage(tchID, content string, st match.Status) {
 	ds.ChannelMessageSend(tchID, "？")
 }
 
-func (b *Bot) getOwnerVch(tchID string) (*dg.Channel, error) {
+func (b *Bot) getOwnerVch(tchID string, owner_id string) (*dg.Channel, error) {
 	glog.V(trace).Infoln("getOwnerVch called")
-	mt, err := b.mts.GetMatchByTChID(tchID)
-	if err != nil {
-		return nil, err
-	}
-
 	tch, err := ds.Channel(tchID)
 	if err != nil {
 		return nil, err
@@ -501,7 +497,7 @@ func (b *Bot) getOwnerVch(tchID string) (*dg.Channel, error) {
 
 	var vch *dg.Channel = nil
 	for _, vs := range g.VoiceStates {
-		if vs.UserID == mt.Owner.ID {
+		if vs.UserID == owner_id {
 			vch, err = ds.Channel(vs.ChannelID)
 			if err != nil {
 				return nil, err
