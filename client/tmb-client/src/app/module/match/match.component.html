@@ -1,0 +1,29 @@
+<div cdkDropListGroup>
+  <div class="team-container">
+    <h2>TeamA</h2>
+    <div
+      cdkDropList
+      #teamAList="cdkDropList"
+      [cdkDropListData]="teamA"
+      class="team-list"
+      (cdkDropListDropped)="drop($event)">
+      <div *ngFor="let player of teamA.players" >
+        <mat-card class="user-card" cdkDrag>{{player.id}}, {{player.name}}</mat-card>
+      </div>
+    </div>
+  </div>
+  
+  <div class="team-container">
+    <h2>TeamB</h2>
+    <div
+      cdkDropList
+      #teamBList="cdkDropList"
+      [cdkDropListData]="teamB"
+      class="team-list"
+      (cdkDropListDropped)="drop($event)">
+      <div *ngFor="let player of teamB.players" >
+        <mat-card class="user-card" cdkDrag>{{player.id}}, {{player.name}}</mat-card>
+      </div>
+    </div>
+  </div>
+</div>
