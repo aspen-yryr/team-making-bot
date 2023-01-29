@@ -5,6 +5,7 @@ import {
 import { Component, OnInit } from '@angular/core';
 import { Team } from '../../model/team'
 import { MatchService } from 'src/app/service/match.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-match',
@@ -15,7 +16,10 @@ export class MatchComponent implements OnInit {
   teamA = new Team(0);
   teamB = new Team(1);
 
-  constructor(private readonly svc: MatchService) { }
+  constructor(
+    private readonly svc: MatchService,
+    private readonly route: ActivatedRoute
+  ) { }
 
   // TODO: Use ngrx
   async drop(event: CdkDragDrop<Team>) {
@@ -33,14 +37,16 @@ export class MatchComponent implements OnInit {
         this.svc.remove('teamB', event.previousContainer.data.players[event.previousIndex])
         this.svc.append('teamA', event.previousContainer.data.players[event.previousIndex])
       }
-      const teams = await this.svc.get()
+      const id = Number(this.route.snapshot.paramMap.get('id'));
+      const teams = await this.svc.get(id)
       this.teamA.players = teams[0]
       this.teamB.players = teams[1]
     }
   }
 
   async ngOnInit(): Promise<void> {
-    const teams = await this.svc.get()
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    const teams = await this.svc.get(id)
     this.teamA.players = teams[0]
     this.teamB.players = teams[1]
     return

@@ -12,9 +12,9 @@ export class MatchService {
     this.client = new MatchSvcClient('http://localhost:8080')
   }
 
-  async find() {
+  async find(id: number) {
     const req = new FindRequest();
-    req.setMatchId(0);
+    req.setMatchId(id);
     return (await this.client.find(req, null)).toObject();
   }
   // TODO: Make user service
@@ -48,15 +48,23 @@ export class MatchService {
     console.log(this.teamB)
   }
 
-  async get(): Promise<User[][]> {
-    const match = await this.find();
-    const users = match.match?.team1?.playersList
-    if (typeof users == "undefined") {
+  async get(id: number): Promise<User[][]> {
+    const match = await this.find(id);
+
+    const users1 = match.match?.team1?.playersList
+    if (typeof users1 == "undefined") {
       return []
     }
-    return [users.map<User>((user) => {
+    const users2 = match.match?.team2?.playersList
+    if (typeof users2 == "undefined") {
+      return []
+    }
+
+    return [users1.map<User>((user) => {
       return new User(user.id, user.name)
-    }), this.teamB]
+    }), users2.map<User>((user) => {
+      return new User(user.id, user.name)
+    })]
   }
 
 }
