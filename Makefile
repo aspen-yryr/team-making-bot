@@ -16,7 +16,14 @@ run_build:
 
 .PHONY: gen_protobuf
 gen_protobuf:
-	@protoc --go_out=. --go_opt=paths=source_relative  \
-	--go-grpc_out=. --go-grpc_opt=paths=source_relative  \
+	@protoc --go_out=. --go_opt=paths=source_relative \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 	--proto_path=. \
 	./proto/match/*.proto
+
+.PHONY: gen_js_pb
+gen_js_pb:
+	@protoc \
+	-I=. ./proto/match/*.proto \
+    --js_out=import_style=commonjs:. \
+    --grpc-web_out=import_style=commonjs,mode=grpcwebtext:.

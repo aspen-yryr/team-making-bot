@@ -15,10 +15,10 @@ export class MatchComponent implements OnInit {
   teamA = new Team(0);
   teamB = new Team(1);
 
-  constructor(private readonly svc: MatchService) {}
+  constructor(private readonly svc: MatchService) { }
 
   // TODO: Use ngrx
-  drop(event: CdkDragDrop<Team>) {
+  async drop(event: CdkDragDrop<Team>) {
     if (event.previousContainer === event.container) {
       moveItemInArray(
         event.container.data.players,
@@ -33,14 +33,14 @@ export class MatchComponent implements OnInit {
         this.svc.remove('teamB', event.previousContainer.data.players[event.previousIndex])
         this.svc.append('teamA', event.previousContainer.data.players[event.previousIndex])
       }
-      const teams = this.svc.get()
+      const teams = await this.svc.get()
       this.teamA.players = teams[0]
       this.teamB.players = teams[1]
     }
   }
 
-  ngOnInit(): void {
-    const teams = this.svc.get()
+  async ngOnInit(): Promise<void> {
+    const teams = await this.svc.get()
     this.teamA.players = teams[0]
     this.teamB.players = teams[1]
     return
