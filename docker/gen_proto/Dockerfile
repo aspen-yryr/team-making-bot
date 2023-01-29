@@ -2,13 +2,6 @@ FROM node:19.4
 
 WORKDIR /var/works
 
-# WORKDIR /github/grpc-web/net/grpc/gateway/examples/echo
-# COPY proto /github/grpc-web/net/grpc/gateway/examples/echo/proto
-
-# RUN protoc -I=. ./proto/match/*.proto \
-#     --js_out=import_style=commonjs:/var/works \
-#     --grpc-web_out=import_style=commonjs,mode=grpcwebtext:/var/works
-
 ARG PROTOBUF_VERSION=3.19.6
 ARG GEN_GRPC_VERSION=1.4.2
 
@@ -29,3 +22,7 @@ RUN curl -sSL \
 
 RUN mv protoc-gen-grpc-web /usr/local/bin && \
     chmod +x /usr/local/bin/protoc-gen-grpc-web
+
+COPY scripts/gen_proto.sh /var/works/
+
+ENTRYPOINT [ "/var/works/gen_proto.sh" ]

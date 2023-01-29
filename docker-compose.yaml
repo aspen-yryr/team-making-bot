@@ -16,12 +16,10 @@ services:
       context: .
       dockerfile: ./docker/client/Dockerfile
     restart: always
-    volumes:
-      - ./client:/var/works/client
     ports:
       - 4200:4200
-    networks:
-      - envoymesh
+    volumes:
+      - ./client:/var/works/client
 
   proxy:
     image: envoyproxy/envoy:v1.15.0
@@ -30,8 +28,6 @@ services:
     ports:
       - 8080:8080
       - 8081:8081
-    # networks:
-    #   - envoymesh
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml
 
@@ -42,20 +38,13 @@ services:
     entrypoint: [ "tail", "-f", "/dev/null" ]
     ports:
       - 50051:50051
-    networks:
-      - envoymesh
 
   gen_proto:
     build:
       context: .
       dockerfile: ./docker/gen_proto/Dockerfile
-    entrypoint: [ "tail", "-f", "/dev/null" ]
     volumes:
       - ./proto:/var/works/proto
 
 volumes:
   postgres:
-
-
-networks:
-  envoymesh: {}
