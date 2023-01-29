@@ -14,7 +14,7 @@ export class MatchService {
 
   async find() {
     const req = new FindRequest();
-    req.setMatchId(1);
+    req.setMatchId(0);
     return (await this.client.find(req, null)).toObject();
   }
   // TODO: Make user service

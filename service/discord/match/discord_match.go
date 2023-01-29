@@ -64,7 +64,7 @@ type DiscordMatchService struct {
 }
 
 func NewDiscordMatchService() *DiscordMatchService {
-	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial("127.0.0.1:50051", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		glog.Errorf("did not connect: %v", err)
 	}

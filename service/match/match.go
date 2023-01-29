@@ -8,6 +8,7 @@ import (
 	tm "github.com/aspen-yryr/team-making-bot/pkg/team-maker"
 	matchpb "github.com/aspen-yryr/team-making-bot/proto/match"
 	"github.com/aspen-yryr/team-making-bot/service/match/user"
+	"github.com/golang/glog"
 )
 
 func toPbUsers(users []*user.User) []*matchpb.User {
@@ -93,6 +94,7 @@ func NewMatchService() matchpb.MatchSvcServer {
 }
 
 func (m *MatchService) CreateUser(_ context.Context, req *matchpb.CreateUserRequest) (*matchpb.CreateUserResponse, error) {
+	glog.V(6).Infoln("CreateUser called")
 	u := user.New(m.user_id_max, req.Name)
 	m.user_id_max++
 	m.users = append(m.users, u)
@@ -105,6 +107,7 @@ func (m *MatchService) CreateUser(_ context.Context, req *matchpb.CreateUserRequ
 }
 
 func (m *MatchService) Create(_ context.Context, req *matchpb.CreateMatchRequest) (*matchpb.CreateMatchResponse, error) {
+	glog.V(6).Infoln("Create called")
 	for _, mt := range m.matches {
 		if mt.Owner.ID == req.Owner.Id {
 			return nil, errors.New("owner already has match")
@@ -128,6 +131,7 @@ func (m *MatchService) Create(_ context.Context, req *matchpb.CreateMatchRequest
 }
 
 func (m *MatchService) Find(_ context.Context, req *matchpb.FindRequest) (*matchpb.FindResponse, error) {
+	glog.V(6).Infoln("Find called")
 	mt, err := m.findByID(req.MatchId)
 	if err != nil {
 		return nil, err
