@@ -121,7 +121,7 @@ func (b *Bot) onMessageCreate(_ *dg.Session, msg *dg.MessageCreate) {
 		}
 	}
 
-	status, err := b.matchSvc.GetMatchStatus(msg.ChannelID)
+	mt, err := b.matchSvc.GetMatchByTChID(msg.ChannelID)
 	if errors.Is(err, errs.MatchNotFound) {
 		glog.V(info).Infof("Channel \"%s\": can't get match status: %v", ds.ChannelUnsafe(msg.ChannelID), err)
 		return
@@ -131,13 +131,14 @@ func (b *Bot) onMessageCreate(_ *dg.Session, msg *dg.MessageCreate) {
 		// Don't send message to user because avoid be troll
 		return
 	}
+	status := mt.Status
 
-	if *status == match.StateVCh1Setting || *status == match.StateVCh2Setting {
-		b.handleVChSettingMessage(msg.ChannelID, msg.Content, *status)
+	if status == match.StateVCh1Setting || status == match.StateVCh2Setting {
+		b.handleVChSettingMessage(msg.ChannelID, msg.Content, status)
 		return
 	}
 
-	if *status == match.StateTeamPreview {
+	if status == match.StateTeamPreview {
 		// TODO: declare keyword as constant
 		if hasKeyword(`shuffle`, msg.Content) {
 			b.cmdShuffle(msg)
@@ -168,17 +169,14 @@ func (b *Bot) onMessageReaction(_ *dg.Session, msg *dg.MessageReactionAdd) {
 		return
 	}
 
-	st, err := b.matchSvc.GetMatchStatus(msg.ChannelID)
-	if errors.Is(err, errs.MatchNotFound) {
-		glog.V(info).Infof("Channel \"%s\": can't get match status", ds.ChannelUnsafe(msg.ChannelID), err)
-		return
-	}
+	status := mt.Status
+
 	if err != nil {
 		glog.Errorf("Channel \"%s\": can't get match status", ds.ChannelUnsafe(msg.ChannelID), err)
 		// Don't send message to user because avoid be troll
 		return
 	}
-	if *st != match.StateVCh1Setting {
+	if status != match.StateVCh1Setting {
 		return
 	}
 
@@ -518,10 +516,11 @@ func (b *Bot) recommendChannel(tchID, vchID string) error {
 		return err
 	}
 
-	err = b.matchSvc.SetRecommendedChannel(tchID, vch)
+	mt, err := b.matchSvc.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
+	mt.RecommendedChannel = vch
 
 	err = ds.MessageReactionAdd(tchID, msg.ID, Stamp["y"])
 	if err != nil {

@@ -38,17 +38,17 @@ type DiscordMatch struct {
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
 	MatchID            int32
-	recommendedChannel *dg.Channel
-	listeningMessage   *dg.Message
-	status             Status
+	RecommendedChannel *dg.Channel
+	ListeningMessage   *dg.Message
+	Status             Status
 }
 
 //TODO: More strictly state management or more get method to nil check
 func (m *DiscordMatch) GetRecommendedChannel() (*dg.Channel, error) {
-	if m.recommendedChannel == nil {
+	if m.RecommendedChannel == nil {
 		return nil, errs.Unknown
 	}
-	return m.recommendedChannel, nil
+	return m.RecommendedChannel, nil
 }
 
 func (m *DiscordMatch) GetGuildId() string {
@@ -106,7 +106,7 @@ func (s *DiscordMatchService) Create(tch *dg.Channel, owner *dg.User) (*DiscordM
 	dMatch := &DiscordMatch{
 		Owner:   owner,
 		tch:     tch,
-		status:  StateVCh1Setting,
+		Status:  StateVCh1Setting,
 		MatchID: match.Match.Id,
 	}
 	s.discordMatches = append(s.discordMatches, dMatch)
@@ -188,13 +188,13 @@ func (s *DiscordMatchService) SetVCh(tchID string, vch *dg.Channel, team string)
 
 	if team == "Team1" {
 		match.Team1VCh = vch
-		match.status = StateVCh2Setting
-		match.recommendedChannel = nil
+		match.Status = StateVCh2Setting
+		match.RecommendedChannel = nil
 		return nil
 	} else if team == "Team2" {
 		match.Team2VCh = vch
-		match.status = StateTeamPreview
-		match.recommendedChannel = nil
+		match.Status = StateTeamPreview
+		match.RecommendedChannel = nil
 		return nil
 	}
 	return errs.InvalidTeam
@@ -269,29 +269,12 @@ func (s *DiscordMatchService) GetMatchByTChID(tchID string) (*DiscordMatch, erro
 	return nil, errs.MatchNotFound
 }
 
-func (s *DiscordMatchService) GetMatchStatus(tchID string) (*Status, error) {
-	match, err := s.GetMatchByTChID(tchID)
-	if err != nil {
-		return nil, err
-	}
-	return &match.status, nil
-}
-
-func (s *DiscordMatchService) SetRecommendedChannel(tchID string, vch *dg.Channel) error {
-	match, err := s.GetMatchByTChID(tchID)
-	if err != nil {
-		return err
-	}
-	match.recommendedChannel = vch
-	return nil
-}
-
 func (s *DiscordMatchService) SetListeningMessage(tchID string, msg *dg.Message) error {
 	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
-	match.listeningMessage = msg
+	match.ListeningMessage = msg
 	return nil
 }
 
@@ -300,7 +283,7 @@ func (s *DiscordMatchService) IsListeningMessage(tchID, msgID string) bool {
 	if err != nil {
 		return false
 	}
-	if match.listeningMessage.ID == msgID {
+	if match.ListeningMessage.ID == msgID {
 		return true
 	}
 	return false
