@@ -13,3 +13,10 @@ build:
 .PHONY: run_build
 run_build:
 	@./app -v 6 -logtostderr --env_file=./env/.env.dev --greet=false
+
+.PHONY: gen_protobuf
+gen_protobuf:
+	@protoc --go_out=. --go_opt=paths=source_relative  \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative  \
+	--proto_path=. \
+	./proto/match/*.proto

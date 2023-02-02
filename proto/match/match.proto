@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package match;
+import "proto/match/user.proto";
+option go_package = "github.com/aspen-yryr/team-making-bot/proto/match";
+
+message Team {
+  int32 id = 1;
+  repeated User players = 2;
+}
+
+message Match {
+  int32 id = 1;
+  User owner = 2;
+  repeated User members = 3;
+  Team team1 = 4;
+  Team team2 = 5;
+}
+
+service MatchSvc {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+  rpc Create(CreateMatchRequest) returns (CreateMatchResponse) {}
+  rpc Find (FindRequest) returns (FindResponse);
+  rpc AppendMembers(AppendMemberRequest) returns (Match) {}
+  rpc Shuffle(ShuffleRequest) returns (ShuffleResponse) {}
+}
+
+message CreateUserRequest {
+  string name = 1;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message CreateMatchRequest {
+  User owner = 1;
+}
+
+message CreateMatchResponse {
+  Match match = 1;
+}
+
+message FindRequest {
+  int32 match_id = 1;
+}
+
+message FindResponse {
+  Match match = 1;
+}
+
+message AppendMemberRequest {
+  int32 match_id = 1;
+  repeated User members = 2;
+}
+
+message ShuffleRequest {
+  int32 match_id = 1;
+}
+
+message ShuffleResponse {
+
+}
