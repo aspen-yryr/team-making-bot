@@ -1,0 +1,50 @@
+version: '3'
+
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    env_file:
+      - ./env/.env.dev
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+  client:
+    build:
+      context: .
+      dockerfile: ./docker/client/Dockerfile
+    restart: always
+    ports:
+      - 4200:4200
+    volumes:
+      - ./client:/var/works/client
+
+  proxy:
+    image: envoyproxy/envoy:v1.15.0
+    environment:
+      NODE_ENV: development
+    ports:
+      - 8080:8080
+      - 8081:8081
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml
+
+  match:
+    build:
+      context: .
+      dockerfile: ./docker/match/Dockerfile
+    entrypoint: [ "tail", "-f", "/dev/null" ]
+    ports:
+      - 50051:50051
+
+  gen_proto:
+    build:
+      context: .
+      dockerfile: ./docker/gen_proto/Dockerfile
+    volumes:
+      - ./proto:/var/works/proto
+
+volumes:
+  postgres:

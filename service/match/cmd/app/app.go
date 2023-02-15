@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	listener, err := net.Listen("tcp", ":50051")
+	listener, err := net.Listen("tcp", "localhost:50051")
 	if err != nil {
 		glog.Fatalf("failed to listen: %v", err)
 	}
