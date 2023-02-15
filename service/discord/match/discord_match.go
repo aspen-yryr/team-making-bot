@@ -38,17 +38,17 @@ type DiscordMatch struct {
 	Team1VCh           *dg.Channel
 	Team2VCh           *dg.Channel
 	MatchID            int32
-	recommendedChannel *dg.Channel
-	listeningMessage   *dg.Message
-	status             Status
+	RecommendedChannel *dg.Channel
+	ListeningMessage   *dg.Message
+	Status             Status
 }
 
 //TODO: More strictly state management or more get method to nil check
 func (m *DiscordMatch) GetRecommendedChannel() (*dg.Channel, error) {
-	if m.recommendedChannel == nil {
+	if m.RecommendedChannel == nil {
 		return nil, errs.Unknown
 	}
-	return m.recommendedChannel, nil
+	return m.RecommendedChannel, nil
 }
 
 func (m *DiscordMatch) GetGuildId() string {
@@ -56,11 +56,11 @@ func (m *DiscordMatch) GetGuildId() string {
 }
 
 type DiscordMatchService struct {
-	dcMatches []*DiscordMatch
-	dcUsers   []*DiscordUser
-	tchMutex  sync.RWMutex
-	vchMutex  sync.RWMutex
-	svc       matchpb.MatchSvcClient
+	discordMatches []*DiscordMatch
+	dcUsers        []*DiscordUser
+	tchMutex       sync.RWMutex
+	vchMutex       sync.RWMutex
+	matchCli       matchpb.MatchSvcClient
 }
 
 func NewDiscordMatchService() *DiscordMatchService {
@@ -68,30 +68,29 @@ func NewDiscordMatchService() *DiscordMatchService {
 	if err != nil {
 		glog.Errorf("did not connect: %v", err)
 	}
-	// defer conn.Close()
 
 	return &DiscordMatchService{
-		dcMatches: []*DiscordMatch{},
-		tchMutex:  sync.RWMutex{},
-		vchMutex:  sync.RWMutex{},
-		svc:       matchpb.NewMatchSvcClient(conn),
+		discordMatches: []*DiscordMatch{},
+		tchMutex:       sync.RWMutex{},
+		vchMutex:       sync.RWMutex{},
+		matchCli:       matchpb.NewMatchSvcClient(conn),
 	}
 }
 
-func (r *DiscordMatchService) Create(tch *dg.Channel, owner *dg.User) (*DiscordMatch, error) {
-	r.tchMutex.Lock()
-	defer r.tchMutex.Unlock()
+func (s *DiscordMatchService) Create(tch *dg.Channel, owner *dg.User) (*DiscordMatch, error) {
+	s.tchMutex.Lock()
+	defer s.tchMutex.Unlock()
 
-	if isContain(tch.ID, du.Channels2IDs(r.getUsingTCh())) {
+	if isContain(tch.ID, du.Channels2IDs(s.getUsingTCh())) {
 		return nil, errs.MatchAlreadyStarted
 	}
 
-	user, err := r.findOrCreateUser(owner)
+	user, err := s.findOrCreateUser(owner)
 	if err != nil {
 		return nil, err
 	}
 
-	mt, err := r.svc.Create(
+	match, err := s.matchCli.Create(
 		context.TODO(),
 		&matchpb.CreateMatchRequest{
 			Owner: &matchpb.User{
@@ -104,35 +103,35 @@ func (r *DiscordMatchService) Create(tch *dg.Channel, owner *dg.User) (*DiscordM
 		return nil, err
 	}
 
-	dmt := &DiscordMatch{
+	dMatch := &DiscordMatch{
 		Owner:   owner,
 		tch:     tch,
-		status:  StateVCh1Setting,
-		MatchID: mt.Match.Id,
+		Status:  StateVCh1Setting,
+		MatchID: match.Match.Id,
 	}
-	r.dcMatches = append(r.dcMatches, dmt)
-	return dmt, nil
+	s.discordMatches = append(s.discordMatches, dMatch)
+	return dMatch, nil
 }
 
-func (r *DiscordMatchService) AppendMembers(tchID string, dg_users []*dg.User) error {
-	mt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) AppendMembers(tchID string, dg_users []*dg.User) error {
+	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
 
 	members := []*matchpb.User{}
 	for _, u := range dg_users {
-		du, err := r.findOrCreateUser(u)
+		du, err := s.findOrCreateUser(u)
 		if err != nil {
 			return err
 		}
 		members = append(members, du.MatchUser)
 	}
 
-	_, err = r.svc.AppendMembers(
+	_, err = s.matchCli.AppendMembers(
 		context.TODO(),
 		&matchpb.AppendMemberRequest{
-			MatchId: mt.MatchID,
+			MatchId: match.MatchID,
 			Members: members,
 		},
 	)
@@ -142,24 +141,24 @@ func (r *DiscordMatchService) AppendMembers(tchID string, dg_users []*dg.User) e
 	return nil
 }
 
-func (r *DiscordMatchService) Remove(tchID string) error {
-	r.tchMutex.Lock()
-	defer r.tchMutex.Unlock()
-	r.vchMutex.Lock()
-	defer r.vchMutex.Unlock()
+func (s *DiscordMatchService) Remove(tchID string) error {
+	s.tchMutex.Lock()
+	defer s.tchMutex.Unlock()
+	s.vchMutex.Lock()
+	defer s.vchMutex.Unlock()
 
-	for i, mt := range r.dcMatches {
+	for i, mt := range s.discordMatches {
 		if mt.tch.ID == tchID {
-			r.dcMatches[i] = r.dcMatches[len(r.dcMatches)-1]
-			r.dcMatches[len(r.dcMatches)-1] = nil
-			r.dcMatches = r.dcMatches[:len(r.dcMatches)-1]
+			s.discordMatches[i] = s.discordMatches[len(s.discordMatches)-1]
+			s.discordMatches[len(s.discordMatches)-1] = nil
+			s.discordMatches = s.discordMatches[:len(s.discordMatches)-1]
 			return nil
 		}
 	}
 	return errs.MatchNotFound
 }
 
-func (r *DiscordMatchService) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
+func (s *DiscordMatchService) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channel {
 	vchs := du.FilterChannelsByType(chs, dg.ChannelTypeGuildVoice)
 	if len(vchs) == 0 {
 		return []*dg.Channel{}
@@ -167,50 +166,50 @@ func (r *DiscordMatchService) FilterAvailableVCh(chs []*dg.Channel) []*dg.Channe
 
 	availableVChs := []*dg.Channel{}
 	for _, vch := range vchs {
-		if !isContain(vch.ID, du.Channels2IDs(r.getUsingVCh())) {
+		if !isContain(vch.ID, du.Channels2IDs(s.getUsingVCh())) {
 			availableVChs = append(availableVChs, vch)
 		}
 	}
 	return availableVChs
 }
 
-func (r *DiscordMatchService) SetVCh(tchID string, vch *dg.Channel, team string) error {
-	mt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) SetVCh(tchID string, vch *dg.Channel, team string) error {
+	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
 
-	r.vchMutex.Lock()
-	defer r.vchMutex.Unlock()
+	s.vchMutex.Lock()
+	defer s.vchMutex.Unlock()
 
-	if isContain(vch.ID, du.Channels2IDs(r.getUsingVCh())) {
+	if isContain(vch.ID, du.Channels2IDs(s.getUsingVCh())) {
 		return errs.ConflictVCh
 	}
 
 	if team == "Team1" {
-		mt.Team1VCh = vch
-		mt.status = StateVCh2Setting
-		mt.recommendedChannel = nil
+		match.Team1VCh = vch
+		match.Status = StateVCh2Setting
+		match.RecommendedChannel = nil
 		return nil
 	} else if team == "Team2" {
-		mt.Team2VCh = vch
-		mt.status = StateTeamPreview
-		mt.recommendedChannel = nil
+		match.Team2VCh = vch
+		match.Status = StateTeamPreview
+		match.RecommendedChannel = nil
 		return nil
 	}
 	return errs.InvalidTeam
 }
 
-func (r *DiscordMatchService) Shuffle(tchID string) error {
-	mt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) Shuffle(tchID string) error {
+	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
 
-	_, err = r.svc.Shuffle(
+	_, err = s.matchCli.Shuffle(
 		context.TODO(),
 		&matchpb.ShuffleRequest{
-			MatchId: mt.MatchID,
+			MatchId: match.MatchID,
 		},
 	)
 	if err != nil {
@@ -220,26 +219,26 @@ func (r *DiscordMatchService) Shuffle(tchID string) error {
 	return nil
 }
 
-func (r *DiscordMatchService) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []string, err error) {
-	dmt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) GetTeam(tchID string) (Team1UserIDs []string, Team2UserIDs []string, err error) {
+	dMatch, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return nil, nil, nil
 	}
 
-	mt, err := r.svc.Find(
+	match, err := s.matchCli.Find(
 		context.TODO(),
 		&matchpb.FindRequest{
-			MatchId: dmt.MatchID,
+			MatchId: dMatch.MatchID,
 		},
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	f := func(us []*matchpb.User) ([]string, error) {
+	listId := func(us []*matchpb.User) ([]string, error) {
 		ret := []string{}
 		for _, u := range us {
-			du, err := r.findUserByMatchUserId(u.Id)
+			du, err := s.findUserByMatchUserId(u.Id)
 			if err != nil {
 				return nil, err
 			}
@@ -248,11 +247,11 @@ func (r *DiscordMatchService) GetTeam(tchID string) (Team1UserIDs []string, Team
 		return ret, nil
 	}
 
-	tm1, err := f(mt.Match.Team1.Players)
+	tm1, err := listId(match.Match.Team1.Players)
 	if err != nil {
 		return nil, nil, err
 	}
-	tm2, err := f(mt.Match.Team2.Players)
+	tm2, err := listId(match.Match.Team2.Players)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -261,8 +260,8 @@ func (r *DiscordMatchService) GetTeam(tchID string) (Team1UserIDs []string, Team
 }
 
 // use cache if we need more performance (not map)
-func (r *DiscordMatchService) GetMatchByTChID(tchID string) (*DiscordMatch, error) {
-	for _, m := range r.dcMatches {
+func (s *DiscordMatchService) GetMatchByTChID(tchID string) (*DiscordMatch, error) {
+	for _, m := range s.discordMatches {
 		if m.tch.ID == tchID {
 			return m, nil
 		}
@@ -270,47 +269,30 @@ func (r *DiscordMatchService) GetMatchByTChID(tchID string) (*DiscordMatch, erro
 	return nil, errs.MatchNotFound
 }
 
-func (r *DiscordMatchService) GetMatchStatus(tchID string) (*Status, error) {
-	mt, err := r.GetMatchByTChID(tchID)
-	if err != nil {
-		return nil, err
-	}
-	return &mt.status, nil
-}
-
-func (r *DiscordMatchService) SetRecommendedChannel(tchID string, vch *dg.Channel) error {
-	mt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) SetListeningMessage(tchID string, msg *dg.Message) error {
+	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return err
 	}
-	mt.recommendedChannel = vch
+	match.ListeningMessage = msg
 	return nil
 }
 
-func (r *DiscordMatchService) SetListeningMessage(tchID string, msg *dg.Message) error {
-	mt, err := r.GetMatchByTChID(tchID)
-	if err != nil {
-		return err
-	}
-	mt.listeningMessage = msg
-	return nil
-}
-
-func (r *DiscordMatchService) IsListeningMessage(tchID, msgID string) bool {
-	mt, err := r.GetMatchByTChID(tchID)
+func (s *DiscordMatchService) IsListeningMessage(tchID, msgID string) bool {
+	match, err := s.GetMatchByTChID(tchID)
 	if err != nil {
 		return false
 	}
-	if mt.listeningMessage.ID == msgID {
+	if match.ListeningMessage.ID == msgID {
 		return true
 	}
 	return false
 }
 
 // use cache if we need more performance(not map)
-func (r *DiscordMatchService) getUsingTCh() []*dg.Channel {
+func (s *DiscordMatchService) getUsingTCh() []*dg.Channel {
 	using := []*dg.Channel{}
-	for _, m := range r.dcMatches {
+	for _, m := range s.discordMatches {
 		if m.tch != nil {
 			using = append(using, m.tch)
 		}
@@ -318,9 +300,9 @@ func (r *DiscordMatchService) getUsingTCh() []*dg.Channel {
 	return using
 }
 
-func (r *DiscordMatchService) getUsingVCh() []*dg.Channel {
+func (s *DiscordMatchService) getUsingVCh() []*dg.Channel {
 	using := []*dg.Channel{}
-	for _, m := range r.dcMatches {
+	for _, m := range s.discordMatches {
 		if m.Team1VCh != nil {
 			using = append(using, m.Team1VCh)
 		}
@@ -331,14 +313,14 @@ func (r *DiscordMatchService) getUsingVCh() []*dg.Channel {
 	return using
 }
 
-func (r *DiscordMatchService) findOrCreateUser(user *dg.User) (*DiscordUser, error) {
-	for _, u := range r.dcUsers {
+func (s *DiscordMatchService) findOrCreateUser(user *dg.User) (*DiscordUser, error) {
+	for _, u := range s.dcUsers {
 		if u.DgUser.ID == user.ID {
 			return u, nil
 		}
 	}
 
-	res, err := r.svc.CreateUser(
+	res, err := s.matchCli.CreateUser(
 		context.TODO(),
 		&matchpb.CreateUserRequest{
 			Name: user.Username,
@@ -353,12 +335,12 @@ func (r *DiscordMatchService) findOrCreateUser(user *dg.User) (*DiscordUser, err
 		MatchUser: res.User,
 	}
 
-	r.dcUsers = append(r.dcUsers, ret)
+	s.dcUsers = append(s.dcUsers, ret)
 	return ret, nil
 }
 
-func (r *DiscordMatchService) findUserByMatchUserId(id int32) (*DiscordUser, error) {
-	for _, u := range r.dcUsers {
+func (s *DiscordMatchService) findUserByMatchUserId(id int32) (*DiscordUser, error) {
+	for _, u := range s.dcUsers {
 		if u.MatchUser.Id == id {
 			return u, nil
 		}

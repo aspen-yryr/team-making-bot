@@ -8,18 +8,17 @@ import (
 	tm "github.com/aspen-yryr/team-making-bot/pkg/team-maker"
 	matchpb "github.com/aspen-yryr/team-making-bot/proto/match"
 	"github.com/aspen-yryr/team-making-bot/service/match/user"
-	"github.com/golang/glog"
 )
 
 func toPbUsers(users []*user.User) []*matchpb.User {
-	upb := []*matchpb.User{}
+	ret := []*matchpb.User{}
 	for _, u := range users {
-		upb = append(upb, &matchpb.User{
+		ret = append(ret, &matchpb.User{
 			Id:   u.ID,
 			Name: u.Name,
 		})
 	}
-	return upb
+	return ret
 }
 
 type Team struct {
@@ -93,11 +92,10 @@ func NewMatchService() matchpb.MatchSvcServer {
 	}
 }
 
-func (m *MatchService) CreateUser(_ context.Context, req *matchpb.CreateUserRequest) (*matchpb.CreateUserResponse, error) {
-	glog.V(6).Infoln("CreateUser called")
-	u := user.New(m.user_id_max, req.Name)
-	m.user_id_max++
-	m.users = append(m.users, u)
+func (s *MatchService) CreateUser(_ context.Context, req *matchpb.CreateUserRequest) (*matchpb.CreateUserResponse, error) {
+	u := user.New(s.user_id_max, req.Name)
+	s.user_id_max++
+	s.users = append(s.users, u)
 	return &matchpb.CreateUserResponse{
 		User: &matchpb.User{
 			Id:   u.ID,
@@ -106,50 +104,48 @@ func (m *MatchService) CreateUser(_ context.Context, req *matchpb.CreateUserRequ
 	}, nil
 }
 
-func (m *MatchService) Create(_ context.Context, req *matchpb.CreateMatchRequest) (*matchpb.CreateMatchResponse, error) {
-	glog.V(6).Infoln("Create called")
-	for _, mt := range m.matches {
+func (s *MatchService) Create(_ context.Context, req *matchpb.CreateMatchRequest) (*matchpb.CreateMatchResponse, error) {
+	for _, mt := range s.matches {
 		if mt.Owner.ID == req.Owner.Id {
 			return nil, errors.New("owner already has match")
 		}
 	}
 
-	mt := NewMatch(
-		m.match_id_max,
+	match := NewMatch(
+		s.match_id_max,
 		&user.User{
 			ID:   req.Owner.Id,
 			Name: req.Owner.Name,
 		},
-		m.CreateTeam(),
-		m.CreateTeam(),
+		s.CreateTeam(),
+		s.CreateTeam(),
 	)
-	m.match_id_max++
-	m.matches = append(m.matches, mt)
+	s.match_id_max++
+	s.matches = append(s.matches, match)
 	return &matchpb.CreateMatchResponse{
-		Match: mt.toPb(),
+		Match: match.toPb(),
 	}, nil
 }
 
-func (m *MatchService) Find(_ context.Context, req *matchpb.FindRequest) (*matchpb.FindResponse, error) {
-	glog.V(6).Infoln("Find called")
-	mt, err := m.findByID(req.MatchId)
+func (s *MatchService) Find(_ context.Context, req *matchpb.FindRequest) (*matchpb.FindResponse, error) {
+	match, err := s.findByID(req.MatchId)
 	if err != nil {
 		return nil, err
 	}
 
 	return &matchpb.FindResponse{
-		Match: mt.toPb(),
+		Match: match.toPb(),
 	}, nil
 }
 
-func (m *MatchService) AppendMembers(_ context.Context, req *matchpb.AppendMemberRequest) (*matchpb.Match, error) {
-	mt, err := m.findByID(req.MatchId)
+func (s *MatchService) AppendMembers(_ context.Context, req *matchpb.AppendMemberRequest) (*matchpb.Match, error) {
+	match, err := s.findByID(req.MatchId)
 	if err != nil {
 		return nil, err
 	}
 
-	in := func(id int32, us []*user.User) bool {
-		for _, u := range us {
+	isIn := func(id int32, users []*user.User) bool {
+		for _, u := range users {
 			if u.ID == id {
 				return true
 			}
@@ -157,82 +153,85 @@ func (m *MatchService) AppendMembers(_ context.Context, req *matchpb.AppendMembe
 		return false
 	}
 	for _, mm := range req.Members {
-		if in(mm.Id, mt.Members) {
+		if isIn(mm.Id, match.Members) {
 			continue
 		}
-		mt.Members = append(mt.Members, &user.User{ID: mm.Id, Name: mm.Name})
+		match.Members = append(match.Members, user.New(mm.Id, mm.Name))
 	}
-	return mt.toPb(), nil
+
+	return match.toPb(), nil
 }
 
-func (m *MatchService) Shuffle(_ context.Context, req *matchpb.ShuffleRequest) (*matchpb.ShuffleResponse, error) {
-	mt, err := m.findByID(req.MatchId)
+func (s *MatchService) Shuffle(_ context.Context, req *matchpb.ShuffleRequest) (*matchpb.ShuffleResponse, error) {
+	match, err := s.findByID(req.MatchId)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: Fix TeamMaker IF
-	f := func(i []int32) []string {
+	i2a := func(i []int32) []string {
 		s := []string{}
 		for _, ii := range i {
 			s = append(s, strconv.Itoa(int(ii)))
 		}
 		return s
 	}
-	f_ := func(ss []string) ([]int32, error) {
+	a2i := func(s []string) ([]int32, error) {
 		i := []int32{}
-		for _, str := range ss {
-			ii, err := strconv.Atoi(str)
+		for _, ss := range s {
+			ii, err := strconv.Atoi(ss)
 			if err != nil {
 				return nil, err
 			}
+
 			i = append(i, int32(ii))
 		}
 		return i, nil
 	}
 
-	rtm := tm.NewRandomTeamMaker(f(user.Ids(mt.Members)))
+	rtm := tm.NewRandomTeamMaker(i2a(user.Ids(match.Members)))
 	teams, err := rtm.MakeTeam()
 	if err != nil {
 		return nil, err
 	}
 
-	mt.Team1.Players = []*user.User{}
-	mt.Team2.Players = []*user.User{}
-	for _, mem := range mt.Members {
-		tm1, err := f_(teams[0])
+	match.Team1.Players = []*user.User{}
+	match.Team2.Players = []*user.User{}
+	for _, mem := range match.Members {
+		tm1, err := a2i(teams[0])
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range tm1 {
 			if mem.ID == p {
-				mt.Team1.Players = append(mt.Team1.Players, mem)
+				match.Team1.Players = append(match.Team1.Players, mem)
 			}
 		}
-		tm2, err := f_(teams[1])
+
+		tm2, err := a2i(teams[1])
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range tm2 {
 			if mem.ID == p {
-				mt.Team2.Players = append(mt.Team2.Players, mem)
+				match.Team2.Players = append(match.Team2.Players, mem)
 			}
 		}
 	}
 	return &matchpb.ShuffleResponse{}, nil
 }
 
-func (m *MatchService) CreateTeam() *Team {
+func (s *MatchService) CreateTeam() *Team {
 	tm := &Team{
-		ID:      m.team_id_max,
+		ID:      s.team_id_max,
 		Players: []*user.User{},
 	}
-	m.team_id_max++
+	s.team_id_max++
 	return tm
 }
 
-func (m *MatchService) findByID(id int32) (*Match, error) {
-	for _, mt := range m.matches {
+func (s *MatchService) findByID(id int32) (*Match, error) {
+	for _, mt := range s.matches {
 		if mt.ID == id {
 			return mt, nil
 		}
