@@ -1,7 +1,7 @@
-import { User } from '../model/user';
 import { Injectable } from '@angular/core';
 import { FindRequest } from 'proto/match/match_pb';
 import { MatchSvcClient } from 'proto/match/MatchServiceClientPb';
+import { Match } from '../model/match';
 
 @Injectable({
   providedIn: 'root',
@@ -12,31 +12,37 @@ export class MatchService {
     this.client = new MatchSvcClient('http://localhost:8080');
   }
 
-  async find(id: number) {
+  async find(id: number): Promise<Match> {
     const req = new FindRequest();
     req.setMatchId(id);
-    return (await this.client.find(req, null)).toObject();
-  }
-
-  async get(id: number): Promise<User[][]> {
-    const match = await this.find(id);
-
-    const users1 = match.match?.team1?.playersList;
-    if (typeof users1 == 'undefined') {
-      return [];
+    const match = (await this.client.find(req, null)).toObject().match;
+    if (match === undefined) {
+      throw new Error('match undefined');
     }
-    const users2 = match.match?.team2?.playersList;
-    if (typeof users2 == 'undefined') {
-      return [];
+    if (match.owner === undefined) {
+      throw new Error('owner undefined');
     }
 
-    return [
-      users1.map<User>((user) => {
-        return new User(user.id, user.name);
+    return {
+      id: match.id,
+      owner: {
+        id: match.owner.id,
+        name: match.owner.name,
+      },
+      teams: [match.team1, match.team2].map((team) => {
+        if (team === undefined) {
+          throw new Error('team undefined');
+        }
+        return {
+          id: team.id,
+          players: team.playersList.map((p) => {
+            return {
+              id: p.id,
+              name: p.name,
+            };
+          }),
+        };
       }),
-      users2.map<User>((user) => {
-        return new User(user.id, user.name);
-      }),
-    ];
+    };
   }
 }

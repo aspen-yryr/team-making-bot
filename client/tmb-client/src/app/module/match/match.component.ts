@@ -19,9 +19,9 @@ export class MatchComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     const id = Number(this.route.snapshot.paramMap.get('id'));
-    const teams = await this.svc.get(id);
-    this.teamA = teams[0];
-    this.teamB = teams[1];
+    const match = await this.svc.find(id);
+    this.teamA = match.teams[0].players;
+    this.teamB = match.teams[1].players;
     return;
   }
 }
