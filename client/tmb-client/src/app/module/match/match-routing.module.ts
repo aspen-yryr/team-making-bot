@@ -1,8 +1,8 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { MatchComponent } from './match.component';
+import { DetailComponent } from './detail/detail.component';
 
-const routes: Routes = [{ path: ':id', component: MatchComponent }];
+const routes: Routes = [{ path: ':id', component: DetailComponent }];
 
 @NgModule({
   imports: [RouterModule.forChild(routes)],

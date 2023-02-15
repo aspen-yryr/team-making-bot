@@ -5,10 +5,10 @@ import { User } from 'src/app/model/user';
 
 @Component({
   selector: 'app-match',
-  templateUrl: './match.component.html',
-  styleUrls: ['./match.component.css'],
+  templateUrl: './detail.component.html',
+  styleUrls: ['./detail.component.css'],
 })
-export class MatchComponent implements OnInit {
+export class DetailComponent implements OnInit {
   teamA: User[] = [];
   teamB: User[] = [];
 
